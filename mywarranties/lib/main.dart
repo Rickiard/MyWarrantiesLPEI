@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'login.dart';
 
 void main() {
   runApp(MyApp());
@@ -141,7 +142,10 @@ class WelcomeScreen extends StatelessWidget {
               // Botão "Login With Email"
               OutlinedButton(
                 onPressed: () {
-                  // Lógica para login com email
+                  Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => LoginScreen())
+                  );
                 },
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: Colors.black, width: 1.5),
