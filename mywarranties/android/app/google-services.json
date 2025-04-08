@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "598622253789",
+    "project_id": "mywarranties-cb801",
+    "storage_bucket": "mywarranties-cb801.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:598622253789:android:689d5abd9c08fe6f3e6134",
+        "android_client_info": {
+          "package_name": "com.example.mywarranties"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFafBggPoQM8C_jZTM2onI-BtFyjNAtAc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

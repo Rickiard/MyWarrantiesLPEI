@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'login.dart';
+import 'register.dart';
 
 void main() {
   runApp(MyApp());
@@ -82,7 +83,10 @@ class WelcomeScreen extends StatelessWidget {
               // Botão "Start Now" com Design Moderno e Cor Adequada
               ElevatedButton(
                 onPressed: () {
-                  // Lógica para iniciar agora
+                  Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => RegisterScreen())
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green, // Cor verde para o botão "Start Now"
