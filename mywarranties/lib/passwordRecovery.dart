@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mywarranties/passwordRecovery.dart';
 
 void main() {
   runApp(MyApp());
@@ -13,17 +12,17 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: LoginScreen(),
+      home: PasswordRecoveryScreen(),
     );
   }
 }
 
-class LoginScreen extends StatefulWidget {
+class PasswordRecoveryScreen extends StatefulWidget {
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  _PasswordRecoveryScreenState createState() => _PasswordRecoveryScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
@@ -71,9 +70,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
               SizedBox(height: 30),
 
-              // Título "Login in Your Account"
+              // Título "Reset your Password"
               Text(
-                'Login in Your Account',
+                'Reset your Password',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -83,7 +82,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               SizedBox(height: 40),
 
-              // Formulário de Login
+              // Formulário de recuperação de password
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -112,70 +111,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
 
-                    SizedBox(height: 20),
-
-                    // Campo de Senha
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: !_isPasswordVisible,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: Icon(Icons.lock),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _isPasswordVisible
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                          ),
-                          onPressed: _togglePasswordVisibility,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                    ),
-
-                    SizedBox(height: 20),
-
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: RichText(
-                        text: TextSpan(
-                          text: 'Forgot your password? ',
-                          style: TextStyle(
-                            color: Colors.black, // Cor do texto normal
-                            fontSize: 14,
-                          ),
-                          children: [
-                            WidgetSpan(
-                              child: GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => PasswordRecoveryScreen()),
-                                  );
-                                },
-                                child: Text(
-                                  "Click Here",
-                                  style: TextStyle(
-                                    color: Colors.blue, // Cor do link
-                                    decoration: TextDecoration.underline, // Sublinhado para indicar link
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
                     SizedBox(height: 30),
 
-                    // Botão "Enter"
+                    // Botão "Send Verify Code"
                     ElevatedButton(
                       onPressed: () {
-                        // Lógica para login
+                        // Lógica para PasswordRecovery
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.pinkAccent,
@@ -186,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       child: Text(
-                        'Enter',
+                        'Send Verify Code',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'login.dart';
-import 'register.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'login.dart'; // Importe sua tela de login
+import 'register.dart'; // Importe sua tela de registro
 
-void main() {
+// Inicialize o GoogleSignIn
+final GoogleSignIn _googleSignIn = GoogleSignIn();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // await Firebase.initializeApp(); // Inicializa o Firebase
   runApp(MyApp());
 }
 
@@ -22,14 +28,24 @@ class MyApp extends StatelessWidget {
 }
 
 class WelcomeScreen extends StatelessWidget {
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
-
-  void _handleGoogleSignIn() async {
+  // Função para lidar com o login do Google
+  Future<void> _handleGoogleSignIn(BuildContext context) async {
     try {
-      await _googleSignIn.signIn();
-      // Lógica após o login com Google
+      // Exibe o pop-up padrão do sistema para escolher a conta
+      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+
+      if (account != null) {
+        // Lógica após o login com Google
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Login bem-sucedido com ${account.displayName}")),
+        );
+
+        // Aqui você pode redirecionar para outra tela ou salvar os dados do usuário
+      }
     } catch (e) {
-      print('Erro ao fazer login com Google: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erro ao fazer login com Google: $e")),
+      );
     }
   }
 
@@ -84,8 +100,8 @@ class WelcomeScreen extends StatelessWidget {
               ElevatedButton(
                 onPressed: () {
                   Navigator.push(
-                    context, 
-                    MaterialPageRoute(builder: (context) => RegisterScreen())
+                    context,
+                    MaterialPageRoute(builder: (context) => RegisterScreen()),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -110,9 +126,9 @@ class WelcomeScreen extends StatelessWidget {
 
               // Botão "Sign in with Google" com altura igual aos outros botões
               InkWell(
-                onTap: _handleGoogleSignIn,
+                onTap: () => _handleGoogleSignIn(context),
                 child: Container(
-                  height: 56, // Altura fixa para corresponder aos outros botões (ajuste conforme necessário)
+                  height: 56, // Altura fixa para corresponder aos outros botões
                   width: 292,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(30), // Borda arredondada
@@ -147,8 +163,8 @@ class WelcomeScreen extends StatelessWidget {
               OutlinedButton(
                 onPressed: () {
                   Navigator.push(
-                    context, 
-                    MaterialPageRoute(builder: (context) => LoginScreen())
+                    context,
+                    MaterialPageRoute(builder: (context) => LoginScreen()),
                   );
                 },
                 style: OutlinedButton.styleFrom(
