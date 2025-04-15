@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:mywarranties/login.dart';
 import 'passwordRecoveryCode.dart';
+import 'dart:math';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-void main() {
+void main() async{
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(MyApp());
 }
 
@@ -116,11 +123,31 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
 
                     // Botão "Send Verify Code"
                     ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => VerifyCodeScreen()),
-                        );
+                      onPressed: () async {
+                        try {
+                          // Envia o e-mail de redefinição de senha
+                          await FirebaseAuth.instance.sendPasswordResetEmail(
+                            email: _emailController.text,
+                          );
+
+                          // Exibe mensagem de sucesso
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Password reset email sent! Check your inbox.'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+
+                          Navigator.pop(context);
+                        } catch (e) {
+                          // Exibe mensagem de erro
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to send password reset email. Please try again.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.pinkAccent,

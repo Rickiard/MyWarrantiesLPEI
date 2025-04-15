@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'login.dart';
+import 'package:email_validator/email_validator.dart';
 
-void main() {
+void main() async{
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.android,
+  );
+
   runApp(MyApp());
 }
 
@@ -25,6 +36,7 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _repeatPasswordController = TextEditingController(); 
   bool _isPasswordVisible = false;
   bool _isRepeatPasswordVisible = false;
 
@@ -137,6 +149,7 @@ Widget build(BuildContext context) {
 
                     // Campo de Repetir Senha
                     TextField(
+                      controller: _repeatPasswordController,
                       obscureText: !_isRepeatPasswordVisible,
                       decoration: InputDecoration(
                       labelText: 'Repeat Password',
@@ -163,8 +176,65 @@ Widget build(BuildContext context) {
 
                     // Botão "Create"
                     ElevatedButton(
-                      onPressed: () {
-                        // Lógica para criar conta
+                      onPressed: () async {
+                        final email = _emailController.text.trim();
+                        final password = _passwordController.text.trim();
+                        final repeatPassword = _repeatPasswordController.text.trim();
+
+                        if (email.isEmpty || password.isEmpty || repeatPassword.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Please fill in all fields.")),
+                          );
+                          return;
+                        }
+
+                        if (!EmailValidator.validate(email)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Invalid email format.")),
+                          );
+                          return;
+                        }
+
+                        if (password != repeatPassword) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Passwords do not match.")),
+                          );
+                          return;
+                        }
+
+                        try {
+                          // Criar conta no Firebase
+                          UserCredential userCredential = await FirebaseAuth.instance
+                              .createUserWithEmailAndPassword(email: email, password: password);
+
+                          final User? user = userCredential.user;
+
+                          if (user != null) {
+                            // Guardar informações do utilizador no Firestore
+                            await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+                              'id': user.uid,
+                              'email': user.email,
+                              'name': '',
+                              'created_at': FieldValue.serverTimestamp(),
+                              'updated_at': FieldValue.serverTimestamp(),
+                            });
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Account created successfully!")),
+                            );
+
+                            // Redirecionar para a tela principal ou de login
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (context) => LoginScreen()),
+                            );
+                          }
+                        } catch (e) {
+                          // Exibir mensagem de erro
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Failed to create account: ${e.toString()}")),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.pinkAccent,

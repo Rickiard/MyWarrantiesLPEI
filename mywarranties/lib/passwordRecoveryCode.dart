@@ -13,27 +13,23 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: VerifyCodeScreen(),
+      home: VerifyCodeScreen(verificationCode: "123456"), // Exemplo de código de verificação
     );
   }
 }
 
 // Tela de inserção do código de verificação
 class VerifyCodeScreen extends StatefulWidget {
+  final String verificationCode; // Parâmetro para o código de verificação
+
+  VerifyCodeScreen({required this.verificationCode}); // Construtor atualizado
+
   @override
   _VerifyCodeScreenState createState() => _VerifyCodeScreenState();
 }
 
 class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
   final List<TextEditingController> _codeControllers = List.generate(6, (_) => TextEditingController());
-
-  @override
-  void dispose() {
-    for (var controller in _codeControllers) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -132,10 +128,31 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                     // Botão "Confirm"
                     ElevatedButton(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => PasswordChangeScreen()),
-                        );
+                        // Combine os valores dos campos de entrada
+                        final enteredCode = _codeControllers.map((controller) => controller.text).join();
+
+                        // Verifique se o código inserido corresponde ao código gerado
+                        if (enteredCode == widget.verificationCode) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Code verified successfully!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+
+                          // Navegue para a tela de alteração de senha
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => PasswordChangeScreen()),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Invalid code. Please try again.'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.pinkAccent,

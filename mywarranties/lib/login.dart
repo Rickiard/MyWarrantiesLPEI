@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mywarranties/passwordRecovery.dart';
+import 'loading.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 void main() {
   runApp(MyApp());
@@ -174,8 +176,41 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     // Botão "Enter"
                     ElevatedButton(
-                      onPressed: () {
-                        // Lógica para login
+                      onPressed: () async{
+                        final email = _emailController.text.trim();
+                            final password = _passwordController.text.trim();
+
+                            if (email.isEmpty || password.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Please fill in both email and password.")),
+                              );
+                              return;
+                            }
+
+                            try {
+                              // Autenticar o utilizador com Firebase
+                              UserCredential userCredential = await FirebaseAuth.instance
+                                  .signInWithEmailAndPassword(email: email, password: password);
+
+                              final User? user = userCredential.user;
+
+                              if (user != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text("Login successful! Welcome, ${user.email}")),
+                                );
+
+                                // Redirecionar para a tela principal ou outra tela
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => LoadingScreen()),
+                                );
+                              }
+                            } catch (e) {
+                              // Exibir mensagem de erro
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Login failed: ${e.toString()}")),
+                              );
+                            }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.pinkAccent,

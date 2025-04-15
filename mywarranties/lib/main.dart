@@ -3,23 +3,21 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firebase_options.dart';
 import 'login.dart';
 import 'register.dart';
-import 'loading.dart';
 
 // Inicialize o GoogleSignIn
-final GoogleSignIn _googleSignIn = GoogleSignIn();
+final GoogleSignIn _googleSignIn = GoogleSignIn(
+  clientId: '598622253789-1oljk3c82dcqorbofvvb2otn12bkkp9s.apps.googleusercontent.com',
+);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    print("Initializing Firebase...");
-    await Firebase.initializeApp();
-    print("Firebase initialized successfully!");
-  } catch (e) {
-    print("Firebase initialization failed: $e");
-  }
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.android,
+  );
 
   runApp(MyApp());
 }
