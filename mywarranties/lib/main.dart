@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'login.dart'; // Importe sua tela de login
-import 'register.dart'; // Importe sua tela de registro
+import 'register.dart'; // Importe sua tela de registo
+import 'loading.dart';
 
 // Inicialize o GoogleSignIn
 final GoogleSignIn _googleSignIn = GoogleSignIn();
@@ -40,7 +41,7 @@ class WelcomeScreen extends StatelessWidget {
           SnackBar(content: Text("Login bem-sucedido com ${account.displayName}")),
         );
 
-        // Aqui você pode redirecionar para outra tela ou salvar os dados do usuário
+        // Aqui você pode redirecionar para outra tela ou salvar os dados do utilizador
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,7 +63,7 @@ class WelcomeScreen extends StatelessWidget {
             children: [
               // Logo da App com Imagem Completa
               Image.asset(
-                'assets/AppLogo.png', // Substitua pelo caminho da imagem do logo da app
+                'assets/AppLogo.png',
                 width: 150,
                 height: 150,
               ),

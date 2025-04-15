@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'passwordRecoveryCode.dart';
 
 void main() {
   runApp(MyApp());
@@ -116,7 +117,10 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                     // Botão "Send Verify Code"
                     ElevatedButton(
                       onPressed: () {
-                        // Lógica para PasswordRecovery
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => PasswordRecoveryCodeScreen()),
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.pinkAccent,
