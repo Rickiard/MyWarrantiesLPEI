@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'login.dart'; // Importe sua tela de login
-import 'register.dart'; // Importe sua tela de registo
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'login.dart';
+import 'register.dart';
 import 'loading.dart';
 
 // Inicialize o GoogleSignIn
@@ -10,7 +12,15 @@ final GoogleSignIn _googleSignIn = GoogleSignIn();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // await Firebase.initializeApp(); // Inicializa o Firebase
+
+  try {
+    print("Initializing Firebase...");
+    await Firebase.initializeApp();
+    print("Firebase initialized successfully!");
+  } catch (e) {
+    print("Firebase initialization failed: $e");
+  }
+
   runApp(MyApp());
 }
 
@@ -32,18 +42,57 @@ class WelcomeScreen extends StatelessWidget {
   // Função para lidar com o login do Google
   Future<void> _handleGoogleSignIn(BuildContext context) async {
     try {
-      // Exibe o pop-up padrão do sistema para escolher a conta
-      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+      // Inicia o processo de login com o Google
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
-      if (account != null) {
-        // Lógica após o login com Google
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Login bem-sucedido com ${account.displayName}")),
+      if (googleUser != null) {
+        // Obtenha os detalhes da conta do Google
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+        // Crie uma credencial do Firebase com o token do Google
+        final AuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
         );
 
-        // Aqui você pode redirecionar para outra tela ou salvar os dados do utilizador
+        // Faça login no Firebase usando a credencial do Google
+        final UserCredential userCredential =
+            await FirebaseAuth.instance.signInWithCredential(credential);
+
+        final User? user = userCredential.user;
+
+        if (user != null) {
+          // Verifique se o utilizador já existe no Firestore
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+
+          if (!userDoc.exists) {
+            // Guardar os dados do utilizador no Firestore se ele for novo
+            await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+              'id': user.uid,
+              'email': user.email,
+              'name': user.displayName,
+              'created_at': FieldValue.serverTimestamp(), 
+              'update_at': FieldValue.serverTimestamp()
+            });
+          }
+
+          // Exibe uma mensagem de sucesso
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Login bem-sucedido com ${user.displayName}")),
+          );
+
+          // Redirecione para a tela principal ou outra tela após o login
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => WelcomeScreen()),
+          );
+        }
       }
     } catch (e) {
+      // Exibe uma mensagem de erro
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Erro ao fazer login com Google: $e")),
       );

@@ -119,7 +119,7 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => PasswordRecoveryCodeScreen()),
+                          MaterialPageRoute(builder: (context) => VerifyCodeScreen()),
                         );
                       },
                       style: ElevatedButton.styleFrom(
