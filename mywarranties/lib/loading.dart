@@ -64,7 +64,7 @@ class LoadingScreen extends StatelessWidget {
                 ),
               ),
 
-              SizedBox(height: 40),
+              SizedBox(height: 100),
 
               // Animação de carregamento
               Row(

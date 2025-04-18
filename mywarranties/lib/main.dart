@@ -3,9 +3,11 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mywarranties/loading.dart';
 import 'firebase_options.dart';
 import 'login.dart';
 import 'register.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Inicialize o GoogleSignIn
 final GoogleSignIn _googleSignIn = GoogleSignIn(
@@ -23,15 +25,92 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  Future<bool> _loadLoginStatus() async {
+    // Obtém uma instância do SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+
+    // Verifica se o utilizador está marcado como logado
+    final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+
+    if (isLoggedIn) {
+      // Se o utilizador está marcado como logado, verifica se o token de autenticação existe
+      final userPassword = prefs.getString('userPassword');
+      final userEmail = prefs.getString('userEmail');
+      final userAcessToken = prefs.getString('accessToken');
+      final userIdToken = await prefs.getString('idToken');
+
+      if (userPassword != null && userEmail != null) {
+        try {
+          final AuthCredential credential = EmailAuthProvider.credential(
+            email: userEmail,
+            password: userPassword,
+          );
+
+          // Realiza o login novamente com as credenciais
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+          // Retorna true se o login for bem-sucedido
+          return true;
+        } catch (e) {
+          // Em caso de erro, o token pode estar inválido ou expirado
+          // Limpa os dados de login e retorna false
+          await prefs.setBool('isLoggedIn', false);
+          await prefs.remove('userPassword');
+          await prefs.remove('userEmail');
+          return false;
+        }
+      } else if (userAcessToken != null && userIdToken != null) {
+        try {
+          final AuthCredential credential = GoogleAuthProvider.credential(
+            accessToken: userAcessToken,
+            idToken: userIdToken,
+          );
+
+          // Realiza o login novamente com as credenciais
+          await FirebaseAuth.instance.signInWithCredential(credential);
+
+          // Retorna true se o login for bem-sucedido
+          return true;
+        } catch (e) {
+          // Em caso de erro, o token pode estar inválido ou expirado
+          // Limpa os dados de login e retorna false
+          await prefs.setBool('isLoggedIn', false);
+          await prefs.remove('userPassword');
+          await prefs.remove('userEmail');
+          return false;
+        }
+      } else {
+        await prefs.setBool('isLoggedIn', false);
+        return false;
+      }
+    }
+
+    // Se o utilizador não estiver marcado como logado, retorna false
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'Roboto',
-        primarySwatch: Colors.blue,
-      ),
-      home: WelcomeScreen(),
+    return FutureBuilder<bool>(
+      future: _loadLoginStatus(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const MaterialApp(
+            home: Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        } else {
+          final isLoggedIn = snapshot.data ?? false;
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(primarySwatch: Colors.blue),
+            home: isLoggedIn ? LoadingScreen() : WelcomeScreen(),
+          );
+        }
+      },
     );
   }
 }
@@ -82,10 +161,15 @@ class WelcomeScreen extends StatelessWidget {
             SnackBar(content: Text("Login bem-sucedido com ${user.displayName}")),
           );
 
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('isLoggedIn', true);
+          await prefs.setString('accessToken', googleAuth.accessToken ?? '');
+          await prefs.setString('idToken', googleAuth.idToken ?? '');
+
           // Redirecione para a tela principal ou outra tela após o login
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => WelcomeScreen()),
+            MaterialPageRoute(builder: (context) => LoadingScreen()),
           );
         }
       }
