@@ -8,6 +8,7 @@ import 'firebase_options.dart';
 import 'login.dart';
 import 'register.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'multifunctionsBar.dart';
 
 // Inicialize o GoogleSignIn
 final GoogleSignIn _googleSignIn = GoogleSignIn(
