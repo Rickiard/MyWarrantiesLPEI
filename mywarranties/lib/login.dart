@@ -209,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             // Redirecionar para a tela principal ou outra tela
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (context) => LoadingScreen()),
+                              MaterialPageRoute(builder: (context) => ListPage()),
                             );
                           }
                         } catch (e) {

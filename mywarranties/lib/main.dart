@@ -9,6 +9,7 @@ import 'login.dart';
 import 'register.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'multifunctionsBar.dart';
+import 'list.dart';
 
 // Inicialize o GoogleSignIn
 final GoogleSignIn _googleSignIn = GoogleSignIn(
@@ -108,7 +109,7 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: ThemeData(primarySwatch: Colors.blue),
-            home: isLoggedIn ? LoadingScreen() : WelcomeScreen(),
+            home: isLoggedIn ? ListPage() : WelcomeScreen(),
           );
         }
       },
