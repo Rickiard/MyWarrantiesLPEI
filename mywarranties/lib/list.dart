@@ -7,6 +7,7 @@ import 'firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login.dart';
 import 'addProduct.dart';
+import 'filter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,6 +53,8 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   bool _isBottomBarCollapsed = false;
   double _lastScrollPosition = 0;
   String _searchQuery = '';
+  Map<String, String> _activeFilters = {};
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -118,7 +121,6 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       // Check if user document exists
       final userSnapshot = await userDoc.get();
       if (!userSnapshot.exists) {
-        // Create user document if it doesn't exist
         await userDoc.set({
           'id': _auth.currentUser!.uid,
           'email': _auth.currentUser!.email,
@@ -129,20 +131,6 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
 
       final productsCollection = userDoc.collection('products');
       
-      // Check if products collection exists and has any documents
-      final productsSnapshot = await productsCollection.limit(1).get();
-      if (productsSnapshot.docs.isEmpty) {
-        // Create initial product to demonstrate the structure
-        await productsCollection.add({
-          'name': 'Xiaomi POCO X7 Pro',
-          'warrantyStatus': 'Active',
-          'expiryDate': '2028-03-27',
-          'imageUrl': 'https://i02.appmifile.com/984_operator_sg/10/03/2023/ce8d1176372346a1923b24c53ad5a287.png',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
       // Listen to real-time updates
       productsCollection.snapshots().listen((snapshot) {
         setState(() {
@@ -151,7 +139,19 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
             ...doc.data(),
           }).toList();
           
-          // Filter products if there's a search query
+          // Apply filters if any
+          if (_activeFilters.isNotEmpty) {
+            _products = _products.where((product) {
+              return _activeFilters.entries.every((filter) {
+                if (filter.value.isEmpty) return true;
+                
+                final fieldValue = (product[filter.key] ?? '').toString().toLowerCase();
+                return fieldValue.contains(filter.value.toLowerCase());
+              });
+            }).toList();
+          }
+          
+          // Apply search query if any
           if (_searchQuery.isNotEmpty) {
             _products = _products.where((product) {
               final name = (product['name'] ?? '').toString().toLowerCase();
@@ -175,6 +175,13 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
         _isLoading = false;
       });
     }
+  }
+
+  void _handleFilters(Map<String, String> filters) {
+    setState(() {
+      _activeFilters = filters;
+      _currentIndex = 0; // Return to list view
+    });
   }
 
   Future<void> _checkLoginAndLoadProducts() async {
@@ -210,177 +217,185 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     super.dispose();
   }
 
+  Widget _buildCurrentView() {
+    if (_currentIndex == 2) { // Filter tab
+      return FilterPage(onApplyFilters: _handleFilters);
+    }
+    
+    // Return the main list view for other tabs
+    return Stack(
+      children: [
+        Column(
+          children: [
+            SizedBox(height: _isSearchBarCollapsed ? 80 : 88),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _errorMessage != null
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                child: Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(color: Colors.red),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _loadProducts,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : _products.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No products found',
+                                style: TextStyle(fontSize: 18),
+                              ),
+                            )
+                          : ListView.builder(
+                              controller: _scrollController,
+                              itemCount: _products.length,
+                              itemBuilder: (context, index) {
+                                final product = _products[index];
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16.0,
+                                    vertical: 8.0,
+                                  ),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(15),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Row(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(8),
+                                            child: Image.network(
+                                              product['imageUrl'] ?? '',
+                                              width: 120,
+                                              height: 120,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return Container(
+                                                  width: 120,
+                                                  height: 120,
+                                                  color: Colors.grey[300],
+                                                  child: const Icon(Icons.image_not_supported),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  product['name'] ?? 'Unknown Product',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 24,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  'Warranty ${product['warrantyStatus'] ?? 'Unknown'}',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 18,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'Expires: ${product['expiryDate'] ?? 'Unknown'}',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 16,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 200),
+          top: 16,
+          left: 16,
+          right: 16,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: _isSearchBarCollapsed ? 50 : 56,
+            width: _isSearchBarCollapsed 
+                ? 56 
+                : MediaQuery.of(context).size.width - 32,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(_isSearchBarCollapsed ? 15 : 30),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: _isSearchBarCollapsed
+                ? IconButton(
+                    icon: const Icon(Icons.search, color: Colors.grey),
+                    onPressed: () {
+                      setState(() => _isSearchBarCollapsed = false);
+                      _animationController.reverse();
+                      _scrollController.animateTo(
+                        0,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                      );
+                    },
+                  )
+                : TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search products...',
+                      hintStyle: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 18,
+                      ),
+                      prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 15,
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFAFE1F0),
       body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                SizedBox(height: _isSearchBarCollapsed ? 80 : 88),
-                Expanded(
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _errorMessage != null
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                                    child: Text(
-                                      _errorMessage!,
-                                      style: const TextStyle(color: Colors.red),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  ElevatedButton(
-                                    onPressed: _loadProducts,
-                                    child: const Text('Retry'),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : _products.isEmpty
-                              ? const Center(
-                                  child: Text(
-                                    'No products found',
-                                    style: TextStyle(fontSize: 18),
-                                  ),
-                                )
-                              : ListView.builder(
-                                  controller: _scrollController,
-                                  itemCount: _products.length,
-                                  itemBuilder: (context, index) {
-                                    final product = _products[index];
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16.0,
-                                        vertical: 8.0,
-                                      ),
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(15),
-                                        ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(16.0),
-                                          child: Row(
-                                            children: [
-                                              ClipRRect(
-                                                borderRadius: BorderRadius.circular(8),
-                                                child: Image.network(
-                                                  product['imageUrl'] ?? '',
-                                                  width: 120,
-                                                  height: 120,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (context, error, stackTrace) {
-                                                    return Container(
-                                                      width: 120,
-                                                      height: 120,
-                                                      color: Colors.grey[300],
-                                                      child: const Icon(Icons.image_not_supported),
-                                                    );
-                                                  },
-                                                ),
-                                              ),
-                                              const SizedBox(width: 16),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      product['name'] ?? 'Unknown Product',
-                                                      style: GoogleFonts.poppins(
-                                                        fontSize: 24,
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    Text(
-                                                      'Warranty ${product['warrantyStatus'] ?? 'Unknown'}',
-                                                      style: GoogleFonts.poppins(
-                                                        fontSize: 18,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      'Expires: ${product['expiryDate'] ?? 'Unknown'}',
-                                                      style: GoogleFonts.poppins(
-                                                        fontSize: 16,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                ),
-              ],
-            ),
-            // Animated Search Bar
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 200),
-              top: 16,
-              left: 16,
-              right: 16,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                height: _isSearchBarCollapsed ? 50 : 56,
-                width: _isSearchBarCollapsed 
-                    ? 56 
-                    : MediaQuery.of(context).size.width - 32,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(_isSearchBarCollapsed ? 15 : 30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: _isSearchBarCollapsed
-                    ? IconButton(
-                        icon: const Icon(Icons.search, color: Colors.grey),
-                        onPressed: () {
-                          setState(() => _isSearchBarCollapsed = false);
-                          _animationController.reverse();
-                          _scrollController.animateTo(
-                            0,
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOut,
-                          );
-                        },
-                      )
-                    : TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search products...',
-                          hintStyle: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 18,
-                          ),
-                          prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 15,
-                          ),
-                        ),
-                      ),
-              ),
-            ),
-          ],
-        ),
+        child: _buildCurrentView(),
       ),
       bottomNavigationBar: GestureDetector(
         onTap: _isBottomBarCollapsed ? () => setState(() => _isBottomBarCollapsed = false) : null,
@@ -408,15 +423,15 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                   children: [
                     IconButton(
                       icon: Icon(Icons.home_outlined,
-                        color: _selectedIndex == 0 ? Colors.blue : Colors.grey,
+                        color: _currentIndex == 0 ? Colors.blue : Colors.grey,
                       ),
-                      onPressed: () => setState(() => _selectedIndex = 0),
+                      onPressed: () => setState(() => _currentIndex = 0),
                     ),
                     IconButton(
                       icon: Icon(Icons.bar_chart,
-                        color: _selectedIndex == 1 ? Colors.blue : Colors.grey,
+                        color: _currentIndex == 1 ? Colors.blue : Colors.grey,
                       ),
-                      onPressed: () => setState(() => _selectedIndex = 1),
+                      onPressed: () => setState(() => _currentIndex = 1),
                     ),
                     Container(
                       width: 60,
@@ -430,15 +445,15 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                     ),
                     IconButton(
                       icon: Icon(Icons.filter_list,
-                        color: _selectedIndex == 2 ? Colors.blue : Colors.grey,
+                        color: _currentIndex == 2 ? Colors.blue : Colors.grey,
                       ),
-                      onPressed: () => setState(() => _selectedIndex = 2),
+                      onPressed: () => setState(() => _currentIndex = 2),
                     ),
                     IconButton(
                       icon: Icon(Icons.person_outline,
-                        color: _selectedIndex == 3 ? Colors.blue : Colors.grey,
+                        color: _currentIndex == 3 ? Colors.blue : Colors.grey,
                       ),
-                      onPressed: () => setState(() => _selectedIndex = 3),
+                      onPressed: () => setState(() => _currentIndex = 3),
                     ),
                   ],
                 ),
