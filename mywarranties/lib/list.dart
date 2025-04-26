@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'login.dart';
 import 'addProduct.dart';
 import 'filter.dart';
-import 'search.dart';
+import 'statistics.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -220,7 +220,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     if (_currentIndex == 2) { // Filter tab
       return FilterPage(onApplyFilters: _handleFilters);
     }
-    
+    if (_currentIndex == 1) { // Statistics tab
+      return StatisticsPage();
+    }
     // Return the main list view for other tabs
     return Stack(
       children: [
