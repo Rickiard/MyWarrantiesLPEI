@@ -8,7 +8,6 @@ import 'firebase_options.dart';
 import 'login.dart';
 import 'register.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'multifunctionsBar.dart';
 import 'list.dart';
 
 // Inicialize o GoogleSignIn
@@ -99,10 +98,10 @@ class MyApp extends StatelessWidget {
       future: _loadLoginStatus(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const MaterialApp(
-            home: Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            ),
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(primarySwatch: Colors.blue),
+            home: LoadingScreen(),
           );
         } else {
           final isLoggedIn = snapshot.data ?? false;
