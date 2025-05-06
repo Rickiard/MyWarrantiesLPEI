@@ -9,6 +9,8 @@ import 'login.dart';
 import 'addProduct.dart';
 import 'filter.dart';
 import 'statistics.dart';
+import 'productInfo.dart';
+import 'profile.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -217,6 +219,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   }
 
   Widget _buildCurrentView() {
+    if (_currentIndex == 3) { // Profile tab
+      return ProfilePage();
+    }
     if (_currentIndex == 2) { // Filter tab
       return FilterPage(onApplyFilters: _handleFilters);
     }
@@ -291,66 +296,76 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                   itemCount: _products.length,
                                   itemBuilder: (context, index) {
                                     final product = _products[index];
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16.0,
-                                        vertical: 8.0,
-                                      ),
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius: BorderRadius.circular(15),
+                                    return GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => ProductInfoPage(product: product),
+                                          ),
+                                        );
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16.0,
+                                          vertical: 8.0,
                                         ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(16.0),
-                                          child: Row(
-                                            children: [
-                                              ClipRRect(
-                                                borderRadius: BorderRadius.circular(8),
-                                                child: Image.network(
-                                                  product['imageUrl'] ?? '',
-                                                  width: 120,
-                                                  height: 120,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (context, error, stackTrace) {
-                                                    return Container(
-                                                      width: 120,
-                                                      height: 120,
-                                                      color: Colors.grey[300],
-                                                      child: const Icon(Icons.image_not_supported),
-                                                    );
-                                                  },
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(15),
+                                          ),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16.0),
+                                            child: Row(
+                                              children: [
+                                                ClipRRect(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  child: Image.network(
+                                                    product['imageUrl'] ?? '',
+                                                    width: 120,
+                                                    height: 120,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder: (context, error, stackTrace) {
+                                                      return Container(
+                                                        width: 120,
+                                                        height: 120,
+                                                        color: Colors.grey[300],
+                                                        child: const Icon(Icons.image_not_supported),
+                                                      );
+                                                    },
+                                                  ),
                                                 ),
-                                              ),
-                                              const SizedBox(width: 16),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      product['name'] ?? 'Unknown Product',
-                                                      style: GoogleFonts.poppins(
-                                                        fontSize: 24,
-                                                        fontWeight: FontWeight.w600,
+                                                const SizedBox(width: 16),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        product['name'] ?? 'Unknown Product',
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 24,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
                                                       ),
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    Text(
-                                                      'Warranty ${product['warrantyStatus'] ?? 'Unknown'}',
-                                                      style: GoogleFonts.poppins(
-                                                        fontSize: 18,
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        'Warranty ${product['warrantyStatus'] ?? 'Unknown'}',
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 18,
+                                                        ),
                                                       ),
-                                                    ),
-                                                    Text(
-                                                      'Expires: ${product['expiryDate'] ?? 'Unknown'}',
-                                                      style: GoogleFonts.poppins(
-                                                        fontSize: 16,
+                                                      Text(
+                                                        'Expires: ${product['expiryDate'] ?? 'Unknown'}',
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 16,
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ],
+                                                    ],
+                                                  ),
                                                 ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
