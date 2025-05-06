@@ -159,51 +159,56 @@ class _StatisticsPageState extends State<StatisticsPage> {
       body: SafeArea(
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
-            : Column(
-                children: [
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Statistics',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            : SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 24.0),
+                  child: Column(
                     children: [
-                      _statCard('$endingSoon', 'Ending within 30 days', Colors.purple),
-                      _statCard('$addedRecently', 'Added in the last 30 days', Colors.green),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Statistics',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _statCard('$endingSoon', 'Ending within 30 days', Colors.purple),
+                          _statCard('$addedRecently', 'Added in the last 30 days', Colors.green),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _statCard('${totalValue.toStringAsFixed(0)}€', 'Total Value', Colors.amber[700] ?? Colors.amber),
+                          _statCard('$productCount', 'Number of products', Colors.teal),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _statCard('$expiredCount', 'Expired Products', Colors.red),
+                          _statCard('$warrantyOverYear', 'Warranty > 1 Year', Colors.deepPurple),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _statCard('${mostExpensive.toStringAsFixed(0)}€', 'Most Expensive', Colors.orange),
+                          _statCard('${averageValue.toStringAsFixed(0)}€', 'Average Value', Colors.blueGrey),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      _statCard('$addedThisYear', 'Added This Year', Colors.indigo),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _statCard('${totalValue.toStringAsFixed(0)}€', 'Total Value', Colors.amber[700] ?? Colors.amber),
-                      _statCard('$productCount', 'Number of products', Colors.teal),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _statCard('$expiredCount', 'Expired Products', Colors.red),
-                      _statCard('$warrantyOverYear', 'Warranty > 1 Year', Colors.deepPurple),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _statCard('${mostExpensive.toStringAsFixed(0)}€', 'Most Expensive', Colors.orange),
-                      _statCard('${averageValue.toStringAsFixed(0)}€', 'Average Value', Colors.blueGrey),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  _statCard('$addedThisYear', 'Added This Year', Colors.indigo),
-                ],
+                ),
               ),
       ),
     );
