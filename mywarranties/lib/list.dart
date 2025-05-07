@@ -45,6 +45,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _allProducts = [];
   bool _isLoading = true;
   String? _errorMessage;
   final TextEditingController _searchController = TextEditingController();
@@ -91,7 +92,29 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
 
   void _handleSearch() {
     setState(() {
-      _searchQuery = _searchController.text.toLowerCase();
+      if (_searchQuery.isEmpty) {
+        _products = _allProducts; // Show the entire list if the search query is empty
+      } else {
+        _products = _allProducts.where((product) {
+          final name = (product['name'] ?? '').toString().toLowerCase();
+          final category = (product['category'] ?? '').toString().toLowerCase();
+          final price = (product['price'] ?? '').toString().toLowerCase();
+          final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
+          final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
+          final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
+          final brand = (product['brand'] ?? '').toString().toLowerCase();
+          final notes = (product['notes'] ?? '').toString().toLowerCase();
+
+          return name.contains(_searchQuery) ||
+                 category.contains(_searchQuery) ||
+                 price.contains(_searchQuery) ||
+                 purchaseDate.contains(_searchQuery) ||
+                 warrantyPeriod.contains(_searchQuery) ||
+                 storeDetails.contains(_searchQuery) ||
+                 brand.contains(_searchQuery) ||
+                 notes.contains(_searchQuery);
+        }).toList();
+      }
     });
   }
 
@@ -150,17 +173,34 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
           }).toList();
         }
 
-        // Apply search query if any (substring search on name and warrantyStatus)
+        // Apply search query if any (substring search on all relevant fields)
         if (_searchQuery.isNotEmpty) {
           allProducts = allProducts.where((product) {
             final name = (product['name'] ?? '').toString().toLowerCase();
-            final warrantyStatus = (product['warrantyStatus'] ?? '').toString().toLowerCase();
-            return name.contains(_searchQuery) || warrantyStatus.contains(_searchQuery);
+            final category = (product['category'] ?? '').toString().toLowerCase();
+            final price = (product['price'] ?? '').toString().toLowerCase();
+            final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
+            final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
+            final warrantyExtension = (product['warrantyExtension'] ?? '').toString().toLowerCase();
+            final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
+            final brand = (product['brand'] ?? '').toString().toLowerCase();
+            final notes = (product['notes'] ?? '').toString().toLowerCase();
+
+            return name.contains(_searchQuery) ||
+                   category.contains(_searchQuery) ||
+                   price.contains(_searchQuery) ||
+                   purchaseDate.contains(_searchQuery) ||
+                   warrantyPeriod.contains(_searchQuery) ||
+                   warrantyExtension.contains(_searchQuery) ||
+                   storeDetails.contains(_searchQuery) ||
+                   brand.contains(_searchQuery) ||
+                   notes.contains(_searchQuery);
           }).toList();
         }
 
         setState(() {
           _products = allProducts;
+          _allProducts = allProducts;
           _isLoading = false;
         });
       }, onError: (e) {
@@ -218,6 +258,30 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     super.dispose();
   }
 
+  String _calculateExpiryDate(String? purchaseDate, String? warrantyPeriod, String? warrantyExtension) {
+    if (purchaseDate == null || warrantyPeriod == null) return 'Unknown';
+    try {
+      final purchaseDateTime = DateTime.parse(purchaseDate);
+      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      return '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  int _parseWarrantyPeriod(String warranty) {
+    if (warranty.toLowerCase().contains('month')) {
+      return int.tryParse(warranty.split(' ')[0]) ?? 0;
+    } else if (warranty.toLowerCase().contains('year')) {
+      return (int.tryParse(warranty.split(' ')[0]) ?? 0) * 12;
+    } else if (warranty.toLowerCase() == 'lifetime') {
+      return 9999; // Arbitrary large number to represent lifetime
+    }
+    return 0;
+  }
+
   Widget _buildCurrentView() {
     if (_currentIndex == 1) {
       return StatisticsPage();
@@ -257,119 +321,118 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                           ),
                         )
                       : _products.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No products found',
-                                style: TextStyle(fontSize: 18),
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'No results found.',
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    "Add this product to MyWarranties so you don't forget the warranty.",
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
                               ),
                             )
-                          : _products.isEmpty
-                              ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        'No results found.',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w400,
-                                        ),
-                                      ),
-                                      SizedBox(height: 8),
-                                      Text(
-                                        "Add this product to MyWarranties\nso you don't forget the warranty.",
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w400,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              : ListView.builder(
-                                  controller: _scrollController,
-                                  itemCount: _products.length,
-                                  itemBuilder: (context, index) {
-                                    final product = _products[index];
-                                    return GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => ProductInfoPage(product: product),
-                                          ),
-                                        );
-                                      },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16.0,
-                                          vertical: 8.0,
-                                        ),
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius: BorderRadius.circular(15),
-                                          ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(16.0),
-                                            child: Row(
-                                              children: [
-                                                ClipRRect(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                  child: Image.network(
-                                                    product['imageUrl'] ?? '',
-                                                    width: 120,
-                                                    height: 120,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (context, error, stackTrace) {
-                                                      return Container(
-                                                        width: 120,
-                                                        height: 120,
-                                                        color: Colors.grey[300],
-                                                        child: const Icon(Icons.image_not_supported),
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 16),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text(
-                                                        product['name'] ?? 'Unknown Product',
-                                                        style: GoogleFonts.poppins(
-                                                          fontSize: 24,
-                                                          fontWeight: FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                      Text(
-                                                        'Warranty ${product['warrantyStatus'] ?? 'Unknown'}',
-                                                        style: GoogleFonts.poppins(
-                                                          fontSize: 18,
-                                                        ),
-                                                      ),
-                                                      Text(
-                                                        'Expires: ${product['expiryDate'] ?? 'Unknown'}',
-                                                        style: GoogleFonts.poppins(
-                                                          fontSize: 16,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
+                          : ListView.builder(
+                              controller: _scrollController,
+                              itemCount: _products.length,
+                              itemBuilder: (context, index) {
+                                final product = _products[index];
+                                return GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ProductInfoPage(product: product),
                                       ),
                                     );
                                   },
-                                ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16.0,
+                                      vertical: 8.0,
+                                    ),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(15),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16.0),
+                                        child: Row(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: Image.network(
+                                                product['imageUrl'] ?? '',
+                                                width: 120,
+                                                height: 120,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) {
+                                                  return Container(
+                                                    width: 120,
+                                                    height: 120,
+                                                    color: Colors.grey[300],
+                                                    child: const Icon(Icons.image_not_supported),
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    product['name'] ?? 'Unknown Product',
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 24,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    'Warranty: ${product['warrantyPeriod'] ?? 'Unknown'}',
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    'Warranty Extension: ${product['warrantyExtension'] ?? 'None'}',
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    'Expires: ${_calculateExpiryDate(product['purchaseDate'], product['warrantyPeriod'], product['warrantyExtension'])}',
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
             ),
           ],
         ),
@@ -412,8 +475,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                     controller: _searchController,
                     onChanged: (value) {
                       setState(() {
-                        _searchQuery = value;
+                        _searchQuery = value.toLowerCase();
                       });
+                      _handleSearch();
                     },
                     decoration: InputDecoration(
                       hintText: 'Search products...',

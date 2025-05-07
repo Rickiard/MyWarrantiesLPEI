@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class FilterPage extends StatefulWidget {
   final Function(Map<String, String>) onApplyFilters;
@@ -18,6 +20,42 @@ class _FilterPageState extends State<FilterPage> {
   final _warrantyPeriodController = TextEditingController();
   final _storeDetailsController = TextEditingController();
   final _brandController = TextEditingController();
+  final _warrantyExtensionController = TextEditingController();
+
+  List<String> _categories = [];
+  List<String> _brands = [];
+  List<String> _stores = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFilterOptions();
+  }
+
+  Future<void> _loadFilterOptions() async {
+    // Fetch unique categories, brands, and stores from the product list
+    final products = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser?.uid)
+        .collection('products')
+        .get();
+
+    final categories = <String>{};
+    final brands = <String>{};
+    final stores = <String>{};
+
+    for (var doc in products.docs) {
+      categories.add(doc['category'] ?? '');
+      brands.add(doc['brand'] ?? '');
+      stores.add(doc['storeDetails'] ?? '');
+    }
+
+    setState(() {
+      _categories = categories.where((e) => e.isNotEmpty).toList();
+      _brands = brands.where((e) => e.isNotEmpty).toList();
+      _stores = stores.where((e) => e.isNotEmpty).toList();
+    });
+  }
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
@@ -43,8 +81,10 @@ class _FilterPageState extends State<FilterPage> {
         'warrantyPeriod': _warrantyPeriodController.text,
         'storeDetails': _storeDetailsController.text,
         'brand': _brandController.text,
+        'warrantyExtension': _warrantyExtensionController.text,
       };
       widget.onApplyFilters(filters);
+      Navigator.pop(context); // Close the filter page after applying filters
     }
   }
 
@@ -57,6 +97,7 @@ class _FilterPageState extends State<FilterPage> {
     _warrantyPeriodController.dispose();
     _storeDetailsController.dispose();
     _brandController.dispose();
+    _warrantyExtensionController.dispose();
     super.dispose();
   }
 
@@ -104,21 +145,28 @@ class _FilterPageState extends State<FilterPage> {
               ),
               SizedBox(height: 16),
 
-              // Product Category
-              TextFormField(
-                controller: _categoryController,
+              // Category Dropdown
+              DropdownButtonFormField<String>(
+                value: _categoryController.text.isNotEmpty ? _categoryController.text : null,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: Colors.white,
-                  labelText: 'Product Category',
+                  labelText: 'Category',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
                 ),
+                items: _categories.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _categoryController.text = value ?? '';
+                  });
+                },
               ),
               SizedBox(height: 16),
 
@@ -165,8 +213,8 @@ class _FilterPageState extends State<FilterPage> {
               SizedBox(height: 16),
 
               // Warranty Period
-              TextFormField(
-                controller: _warrantyPeriodController,
+              DropdownButtonFormField<String>(
+                value: _warrantyPeriodController.text.isNotEmpty ? _warrantyPeriodController.text : null,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: Colors.white,
@@ -174,49 +222,108 @@ class _FilterPageState extends State<FilterPage> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
                 ),
+                items: [
+                  '6 months',
+                  '1 year',
+                  '2 years',
+                  '3 years',
+                  '5 years',
+                  'Lifetime',
+                ].map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _warrantyPeriodController.text = value ?? '';
+                  });
+                },
               ),
               SizedBox(height: 16),
 
-              // Store Details
-              TextFormField(
-                controller: _storeDetailsController,
+              // Store Dropdown
+              DropdownButtonFormField<String>(
+                value: _storeDetailsController.text.isNotEmpty ? _storeDetailsController.text : null,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: Colors.white,
-                  labelText: 'Store Details',
+                  labelText: 'Store',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
                 ),
+                items: _stores.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _storeDetailsController.text = value ?? '';
+                  });
+                },
               ),
               SizedBox(height: 16),
 
-              // Product Brand
-              TextFormField(
-                controller: _brandController,
+              // Brand Dropdown
+              DropdownButtonFormField<String>(
+                value: _brandController.text.isNotEmpty ? _brandController.text : null,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: Colors.white,
-                  labelText: 'Product Brand',
+                  labelText: 'Brand',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  enabledBorder: OutlineInputBorder(
+                ),
+                items: _brands.map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _brandController.text = value ?? '';
+                  });
+                },
+              ),
+              SizedBox(height: 16),
+
+              // Warranty Extension
+              DropdownButtonFormField<String>(
+                value: _warrantyExtensionController.text.isNotEmpty ? _warrantyExtensionController.text : null,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  labelText: 'Warranty Extension',
+                  border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                 ),
+                items: [
+                  '6 months',
+                  '1 year',
+                  '2 years',
+                  '3 years',
+                  '5 years',
+                ].map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _warrantyExtensionController.text = value ?? '';
+                  });
+                },
               ),
-              SizedBox(height: 24),
+              SizedBox(height: 16),
 
               // Apply and Clear Buttons
               Row(
@@ -233,6 +340,7 @@ class _FilterPageState extends State<FilterPage> {
                           _warrantyPeriodController.clear();
                           _storeDetailsController.clear();
                           _brandController.clear();
+                          _warrantyExtensionController.clear();
                         });
                       },
                       style: ElevatedButton.styleFrom(
@@ -255,7 +363,21 @@ class _FilterPageState extends State<FilterPage> {
                   SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _applyFilters,
+                      onPressed: () {
+                        if (_formKey.currentState!.validate()) {
+                          final filters = {
+                            'name': _nameController.text,
+                            'category': _categoryController.text,
+                            'price': _priceController.text,
+                            'purchaseDate': _purchaseDateController.text,
+                            'warrantyPeriod': _warrantyPeriodController.text,
+                            'storeDetails': _storeDetailsController.text,
+                            'brand': _brandController.text,
+                            'warrantyExtension': _warrantyExtensionController.text,
+                          };
+                          widget.onApplyFilters(filters);
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         foregroundColor: Colors.white,

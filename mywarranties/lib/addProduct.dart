@@ -20,12 +20,63 @@ class _AddProductPageState extends State<AddProductPage> {
   final _storeDetailsController = TextEditingController();
   final _brandController = TextEditingController();
   final _notesController = TextEditingController();
+  final _warrantyExtensionController = TextEditingController();
   
   File? _productImage;
   File? _receiptFile;
   File? _warrantyFile;
   File? _otherDocuments;
   bool _isLoading = false;
+  bool _isWarrantyExtensionActivated = false;
+
+  List<String> _categories = [];
+  List<String> _brands = [];
+  List<String> _stores = [];
+  List<String> _warrantyPeriods = [
+    '6 months',
+    '1 year',
+    '2 years',
+    '3 years',
+    '5 years',
+    'Lifetime',
+  ];
+  List<String> _warrantyExtensions = [
+    '6 months',
+    '1 year',
+    '2 years',
+    '3 years',
+    '5 years',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOptions();
+  }
+
+  Future<void> _loadOptions() async {
+    final products = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser?.uid)
+        .collection('products')
+        .get();
+
+    final categories = <String>{};
+    final brands = <String>{};
+    final stores = <String>{};
+
+    for (var doc in products.docs) {
+      categories.add(doc['category'] ?? '');
+      brands.add(doc['brand'] ?? '');
+      stores.add(doc['storeDetails'] ?? '');
+    }
+
+    setState(() {
+      _categories = categories.where((e) => e.isNotEmpty).toList();
+      _brands = brands.where((e) => e.isNotEmpty).toList();
+      _stores = stores.where((e) => e.isNotEmpty).toList();
+    });
+  }
 
   Future<void> _selectDate(TextEditingController controller) async {
     final DateTime? picked = await showDatePicker(
@@ -109,6 +160,7 @@ class _AddProductPageState extends State<AddProductPage> {
         'storeDetails': _storeDetailsController.text,
         'brand': _brandController.text,
         'notes': _notesController.text,
+        'warrantyExtension': _isWarrantyExtensionActivated ? _warrantyExtensionController.text : null,
         'imageUrl': imageUrl,
         'receiptUrl': receiptUrl,
         'warrantyUrl': warrantyUrl,
@@ -125,6 +177,71 @@ class _AddProductPageState extends State<AddProductPage> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Widget _buildDropdownWithAddOption(String label, List<String> options, TextEditingController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<String>(
+          value: controller.text.isNotEmpty ? controller.text : null,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            labelText: label,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          items: options.map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value),
+            );
+          }).toList(),
+          onChanged: (value) {
+            setState(() {
+              controller.text = value ?? '';
+            });
+          },
+        ),
+        TextButton(
+          onPressed: () async {
+            final newValue = await showDialog<String>(
+              context: context,
+              builder: (BuildContext context) {
+                final TextEditingController newController = TextEditingController();
+                return AlertDialog(
+                  title: Text('Add New $label'),
+                  content: TextField(
+                    controller: newController,
+                    decoration: InputDecoration(hintText: 'Enter new $label'),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, null),
+                      child: Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, newController.text),
+                      child: Text('Add'),
+                    ),
+                  ],
+                );
+              },
+            );
+
+            if (newValue != null && newValue.isNotEmpty) {
+              setState(() {
+                options.add(newValue);
+                controller.text = newValue;
+              });
+            }
+          },
+          child: Text('Add New $label'),
+        ),
+      ],
+    );
   }
 
   @override
@@ -181,15 +298,7 @@ class _AddProductPageState extends State<AddProductPage> {
               ),
               SizedBox(height: 16),
 
-              TextFormField(
-                controller: _categoryController,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Category',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
+              _buildDropdownWithAddOption('Category', _categories, _categoryController),
               SizedBox(height: 16),
 
               TextFormField(
@@ -201,6 +310,12 @@ class _AddProductPageState extends State<AddProductPage> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 keyboardType: TextInputType.number,
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  final price = double.tryParse(v);
+                  if (price == null || price <= 0) return 'Enter a valid price';
+                  return null;
+                },
               ),
               SizedBox(height: 16),
 
@@ -217,40 +332,33 @@ class _AddProductPageState extends State<AddProductPage> {
                   ),
                 ),
                 readOnly: true,
+                validator: (v) => v?.isEmpty == true ? 'Required' : null,
               ),
               SizedBox(height: 16),
 
-              TextFormField(
-                controller: _warrantyPeriodController,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Warranty Period',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
+              _buildDropdownWithAddOption('Warranty Period', _warrantyPeriods, _warrantyPeriodController),
               SizedBox(height: 16),
 
-              TextFormField(
-                controller: _storeDetailsController,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Store Details',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+              SwitchListTile(
+                title: Text('Activate Warranty Extension'),
+                value: _isWarrantyExtensionActivated,
+                onChanged: (bool value) {
+                  setState(() {
+                    _isWarrantyExtensionActivated = value;
+                    if (!value) {
+                      _warrantyExtensionController.text = '';
+                    }
+                  });
+                },
               ),
+              if (_isWarrantyExtensionActivated)
+                _buildDropdownWithAddOption('Warranty Extension', _warrantyExtensions, _warrantyExtensionController),
               SizedBox(height: 16),
 
-              TextFormField(
-                controller: _brandController,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Product Brand',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
+              _buildDropdownWithAddOption('Store Details', _stores, _storeDetailsController),
+              SizedBox(height: 16),
+
+              _buildDropdownWithAddOption('Product Brand', _brands, _brandController),
               SizedBox(height: 16),
 
               TextFormField(
@@ -339,6 +447,7 @@ class _AddProductPageState extends State<AddProductPage> {
     _storeDetailsController.dispose();
     _brandController.dispose();
     _notesController.dispose();
+    _warrantyExtensionController.dispose();
     super.dispose();
   }
 }
