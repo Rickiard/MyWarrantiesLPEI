@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:io';
 import 'package:mywarranties/main.dart' as app;
 import 'passwordChange.dart';
@@ -19,18 +18,20 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
+  
   bool _isLoading = true;
   String _username = '';
   String _email = '';
   String _password = '••••••••';
   List<Map<String, dynamic>> _accounts = [];
-
+  
   // Controller for adding new account
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  
 
+  
   @override
   void initState() {
     super.initState();
@@ -80,7 +81,7 @@ class _ProfilePageState extends State<ProfilePage> {
             onPressed: () {
               // Fechar o diálogo primeiro
               Navigator.of(context).pop();
-
+              
               // Executar o logout sem bloqueio
               _performLogout();
             },
@@ -90,7 +91,7 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
-
+  
   // Método separado para realizar o logout sem bloquear a UI
   void _performLogout() async {
     try {
@@ -101,7 +102,7 @@ class _ProfilePageState extends State<ProfilePage> {
       prefs.remove('userPassword');
       prefs.remove('accessToken');
       prefs.remove('idToken');
-
+      
       // Navegar para a tela principal imediatamente
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
@@ -352,40 +353,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) {
-        // User canceled the sign-in
-        return;
-      }
-
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-
-      setState(() {
-        _email = userCredential.user?.email ?? 'No email';
-        _accounts.add({
-          'email': _email,
-          'uid': userCredential.user?.uid,
-        });
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Signed in with Google as $_email')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to sign in with Google: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -601,20 +568,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                   },
                                 )),
                           ],
-                        ),
-                      ),
-                      SizedBox(height: 20),
-                      ElevatedButton.icon(
-                        onPressed: _signInWithGoogle,
-                        icon: Icon(Icons.login),
-                        label: Text('Sign in with Google'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
                         ),
                       ),
                       SizedBox(height: 30),
