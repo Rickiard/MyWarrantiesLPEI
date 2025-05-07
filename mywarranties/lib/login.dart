@@ -4,6 +4,7 @@ import 'package:mywarranties/passwordRecovery.dart';
 import 'loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 void main() {
   runApp(MyApp());
@@ -197,6 +198,32 @@ class _LoginScreenState extends State<LoginScreen> {
                           final User? user = userCredential.user;
 
                           if (user != null) {
+                            // Verificar se a conta já está logada em outro dispositivo
+                            final idTokenResult = await user.getIdTokenResult(true);
+                            final claims = idTokenResult.claims;
+
+                            if (claims != null && claims['isLoggedIn'] == true) {
+                              // Enviar mensagem para o outro dispositivo
+                              await FirebaseFirestore.instance
+                                  .collection('notifications')
+                                  .doc(user.uid)
+                                  .set({
+                                'message': 'You have been logged out because your account was accessed on another device.',
+                                'timestamp': FieldValue.serverTimestamp(),
+                              });
+
+                              // Atualizar o estado de login no Firebase
+                              await FirebaseAuth.instance.signOut();
+                            }
+
+                            // Atualizar o estado de login para o dispositivo atual
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(user.uid)
+                                .set({
+                              'isLoggedIn': true,
+                            }, SetOptions(merge: true));
+
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text("Login successful! Welcome, ${user.email}")),
                             );
