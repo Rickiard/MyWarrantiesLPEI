@@ -94,8 +94,16 @@ class _StatisticsPageState extends State<StatisticsPage> {
       // Warranty > 1 year
       if (data['warrantyPeriod'] != null) {
         try {
-          final period = int.tryParse(data['warrantyPeriod'].toString()) ?? 0;
-          if (period > 12) {
+          final warrantyString = data['warrantyPeriod'].toString().toLowerCase();
+          int periodInMonths = 0;
+
+          if (warrantyString.contains('month')) {
+            periodInMonths = int.tryParse(warrantyString.split(' ')[0]) ?? 0;
+          } else if (warrantyString.contains('year')) {
+            periodInMonths = (int.tryParse(warrantyString.split(' ')[0]) ?? 0) * 12;
+          }
+
+          if (periodInMonths > 12) {
             warrantyYear++;
           }
         } catch (_) {}
