@@ -4,8 +4,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class FilterPage extends StatefulWidget {
   final Function(Map<String, String>) onApplyFilters;
+  final Map<String, String>? activeFilters; // Para receber os filtros ativos
 
-  const FilterPage({Key? key, required this.onApplyFilters}) : super(key: key);
+  const FilterPage({
+    Key? key, 
+    required this.onApplyFilters, 
+    this.activeFilters,
+  }) : super(key: key);
 
   @override
   _FilterPageState createState() => _FilterPageState();
@@ -25,11 +30,13 @@ class _FilterPageState extends State<FilterPage> {
   List<String> _categories = [];
   List<String> _brands = [];
   List<String> _stores = [];
+  bool _hasActiveFilters = false;
 
   @override
   void initState() {
     super.initState();
     _loadFilterOptions();
+    _loadActiveFilters();
   }
 
   Future<void> _loadFilterOptions() async {
@@ -55,6 +62,23 @@ class _FilterPageState extends State<FilterPage> {
       _brands = brands.where((e) => e.isNotEmpty).toList();
       _stores = stores.where((e) => e.isNotEmpty).toList();
     });
+  }
+
+  void _loadActiveFilters() {
+    if (widget.activeFilters != null) {
+      setState(() {
+        _nameController.text = widget.activeFilters!['name'] ?? '';
+        _categoryController.text = widget.activeFilters!['category'] ?? '';
+        _priceController.text = widget.activeFilters!['price'] ?? '';
+        _purchaseDateController.text = widget.activeFilters!['purchaseDate'] ?? '';
+        _warrantyPeriodController.text = widget.activeFilters!['warrantyPeriod'] ?? '';
+        _storeDetailsController.text = widget.activeFilters!['storeDetails'] ?? '';
+        _brandController.text = widget.activeFilters!['brand'] ?? '';
+        _warrantyExtensionController.text = widget.activeFilters!['warrantyExtension'] ?? '';
+        
+        _hasActiveFilters = widget.activeFilters!.values.any((value) => value.isNotEmpty);
+      });
+    }
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -83,9 +107,50 @@ class _FilterPageState extends State<FilterPage> {
         'brand': _brandController.text,
         'warrantyExtension': _warrantyExtensionController.text,
       };
+
+      // Verificar se há algum filtro ativo
+      bool hasActiveFilters = filters.values.any((value) => value.isNotEmpty);
+      
+      setState(() {
+        _hasActiveFilters = hasActiveFilters;
+      });
+
       widget.onApplyFilters(filters);
-      Navigator.pop(context); // Close the filter page after applying filters
+      
+      // Mostrar snackbar indicando que os filtros foram aplicados
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(hasActiveFilters ? 'Filters applied successfully!' : 'All filters cleared'),
+          backgroundColor: hasActiveFilters ? Colors.green : Colors.blue,
+        ),
+      );
     }
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _nameController.clear();
+      _categoryController.clear();
+      _priceController.clear();
+      _purchaseDateController.clear();
+      _warrantyPeriodController.clear();
+      _storeDetailsController.clear();
+      _brandController.clear();
+      _warrantyExtensionController.clear();
+      _hasActiveFilters = false;
+    });
+
+    // Chamar onApplyFilters com filtros vazios
+    widget.onApplyFilters({
+      'name': '',
+      'category': '',
+      'price': '',
+      'purchaseDate': '',
+      'warrantyPeriod': '',
+      'storeDetails': '',
+      'brand': '',
+      'warrantyExtension': '',
+    });
   }
 
   @override
@@ -106,7 +171,29 @@ class _FilterPageState extends State<FilterPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFAFE1F0),
       appBar: AppBar(
-        title: Text('Filter Products'),
+        title: Row(
+          children: [
+            Text('Filter Products'),
+            if (_hasActiveFilters)
+              Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Active',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -321,19 +408,7 @@ class _FilterPageState extends State<FilterPage> {
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        // Clear all filters
-                        setState(() {
-                          _nameController.clear();
-                          _categoryController.clear();
-                          _priceController.clear();
-                          _purchaseDateController.clear();
-                          _warrantyPeriodController.clear();
-                          _storeDetailsController.clear();
-                          _brandController.clear();
-                          _warrantyExtensionController.clear();
-                        });
-                      },
+                      onPressed: _clearFilters,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.grey[300],
                         foregroundColor: Colors.black87,
@@ -354,21 +429,7 @@ class _FilterPageState extends State<FilterPage> {
                   SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        if (_formKey.currentState!.validate()) {
-                          final filters = {
-                            'name': _nameController.text,
-                            'category': _categoryController.text,
-                            'price': _priceController.text,
-                            'purchaseDate': _purchaseDateController.text,
-                            'warrantyPeriod': _warrantyPeriodController.text,
-                            'storeDetails': _storeDetailsController.text,
-                            'brand': _brandController.text,
-                            'warrantyExtension': _warrantyExtensionController.text,
-                          };
-                          widget.onApplyFilters(filters);
-                        }
-                      },
+                      onPressed: _applyFilters,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         foregroundColor: Colors.white,

@@ -58,6 +58,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   double _lastScrollPosition = 0;
   String _searchQuery = '';
   Map<String, String> _activeFilters = {};
+  bool _hasActiveFilters = false;
   int _currentIndex = 0;
 
   @override
@@ -141,78 +142,63 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       return;
     }
 
+    setState(() => _isLoading = true);
+
     try {
       final userDoc = _firestore.collection('users').doc(_auth.currentUser!.uid);
-      // Check if user document exists and create if it doesn't
-      final userSnapshot = await userDoc.get();
-      if (!userSnapshot.exists) {
-        await userDoc.set({
-          'id': _auth.currentUser!.uid,
-          'email': _auth.currentUser!.email,
-          'created_at': FieldValue.serverTimestamp(),
-          'updated_at': FieldValue.serverTimestamp(),
-        });
+      final productsCollection = userDoc.collection('products');
+      
+      final snapshot = await productsCollection.get();
+      List<Map<String, dynamic>> allProducts = snapshot.docs.map((doc) => {
+        'id': doc.id,
+        ...doc.data(),
+      }).toList();
+
+      // Apply filters if any
+      if (_activeFilters.isNotEmpty) {
+        allProducts = allProducts.where((product) {
+          return _activeFilters.entries.every((filter) {
+            if (filter.value.isEmpty) return true;
+            final fieldValue = (product[filter.key] ?? '').toString().toLowerCase();
+            return fieldValue == filter.value.toLowerCase();
+          });
+        }).toList();
       }
 
-      final productsCollection = userDoc.collection('products');
-      // Fetch all products and filter client-side for best UX with small datasets
-      productsCollection.snapshots().listen((snapshot) {
-        List<Map<String, dynamic>> allProducts = snapshot.docs.map((doc) => {
-          'id': doc.id,
-          ...doc.data(),
+      // Apply search query if any
+      if (_searchQuery.isNotEmpty) {
+        allProducts = allProducts.where((product) {
+          final name = (product['name'] ?? '').toString().toLowerCase();
+          final category = (product['category'] ?? '').toString().toLowerCase();
+          final price = (product['price'] ?? '').toString().toLowerCase();
+          final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
+          final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
+          final warrantyExtension = (product['warrantyExtension'] ?? '').toString().toLowerCase();
+          final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
+          final brand = (product['brand'] ?? '').toString().toLowerCase();
+          final notes = (product['notes'] ?? '').toString().toLowerCase();
+
+          return name.contains(_searchQuery) ||
+                 category.contains(_searchQuery) ||
+                 price.contains(_searchQuery) ||
+                 purchaseDate.contains(_searchQuery) ||
+                 warrantyPeriod.contains(_searchQuery) ||
+                 warrantyExtension.contains(_searchQuery) ||
+                 storeDetails.contains(_searchQuery) ||
+                 brand.contains(_searchQuery) ||
+                 notes.contains(_searchQuery);
         }).toList();
+      }
 
-        // Apply filters if any
-        if (_activeFilters.isNotEmpty) {
-          allProducts = allProducts.where((product) {
-            return _activeFilters.entries.every((filter) {
-              if (filter.value.isEmpty) return true;
-              final fieldValue = (product[filter.key] ?? '').toString().toLowerCase();
-              return fieldValue.contains(filter.value.toLowerCase());
-            });
-          }).toList();
-        }
-
-        // Apply search query if any (substring search on all relevant fields)
-        if (_searchQuery.isNotEmpty) {
-          allProducts = allProducts.where((product) {
-            final name = (product['name'] ?? '').toString().toLowerCase();
-            final category = (product['category'] ?? '').toString().toLowerCase();
-            final price = (product['price'] ?? '').toString().toLowerCase();
-            final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
-            final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
-            final warrantyExtension = (product['warrantyExtension'] ?? '').toString().toLowerCase();
-            final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
-            final brand = (product['brand'] ?? '').toString().toLowerCase();
-            final notes = (product['notes'] ?? '').toString().toLowerCase();
-
-            return name.contains(_searchQuery) ||
-                   category.contains(_searchQuery) ||
-                   price.contains(_searchQuery) ||
-                   purchaseDate.contains(_searchQuery) ||
-                   warrantyPeriod.contains(_searchQuery) ||
-                   warrantyExtension.contains(_searchQuery) ||
-                   storeDetails.contains(_searchQuery) ||
-                   brand.contains(_searchQuery) ||
-                   notes.contains(_searchQuery);
-          }).toList();
-        }
-
-        setState(() {
-          _products = allProducts;
-          _allProducts = allProducts;
-          _isLoading = false;
-        });
-      }, onError: (e) {
-        setState(() {
-          _errorMessage = 'Error loading products: $e';
-          _isLoading = false;
-        });
+      setState(() {
+        _products = allProducts;
+        _allProducts = allProducts;
+        _isLoading = false;
       });
     } catch (e) {
-      print('Error setting up products: $e');
+      print('Error loading products: $e');
       setState(() {
-        _errorMessage = 'Error setting up products: $e';
+        _errorMessage = 'Error loading products: $e';
         _isLoading = false;
       });
     }
@@ -221,8 +207,12 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   void _handleFilters(Map<String, String> filters) {
     setState(() {
       _activeFilters = filters;
+      _hasActiveFilters = filters.values.any((value) => value.isNotEmpty);
       _currentIndex = 0; // Return to list view
     });
+    
+    // Reload products with new filters
+    _loadProducts();
   }
 
   Future<void> _checkLoginAndLoadProducts() async {
@@ -282,11 +272,106 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     return 0;
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFAFE1F0),
+      body: SafeArea(
+        child: _buildCurrentView(),
+      ),
+      bottomNavigationBar: GestureDetector(
+        onTap: _isBottomBarCollapsed ? () => setState(() => _isBottomBarCollapsed = false) : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: _isBottomBarCollapsed ? 15 : 80,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: _isBottomBarCollapsed
+              ? Container()
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.home_outlined,
+                        color: _currentIndex == 0 ? Colors.blue : Colors.grey,
+                      ),
+                      onPressed: () => setState(() => _currentIndex = 0),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.bar_chart,
+                        color: _currentIndex == 1 ? Colors.blue : Colors.grey,
+                      ),
+                      onPressed: () => setState(() => _currentIndex = 1),
+                    ),
+                    Container(
+                      width: 60,
+                      height: 60,
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      child: FloatingActionButton(
+                        backgroundColor: Colors.blue,
+                        child: const Icon(Icons.add, size: 30),
+                        onPressed: _addProduct,
+                      ),
+                    ),
+                    Stack(
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.filter_list,
+                            color: _currentIndex == 2 ? Colors.blue : Colors.grey,
+                          ),
+                          onPressed: () => setState(() => _currentIndex = 2),
+                        ),
+                        if (_hasActiveFilters)
+                          Positioned(
+                            right: 8,
+                            top: 8,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.person_outline,
+                        color: _currentIndex == 3 ? Colors.blue : Colors.grey,
+                      ),
+                      onPressed: () => setState(() => _currentIndex = 3),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCurrentView() {
     if (_currentIndex == 1) {
       return StatisticsPage();
     } else if (_currentIndex == 2) {
-      return FilterPage(onApplyFilters: _handleFilters);
+      return FilterPage(
+        onApplyFilters: (filters) {
+          _handleFilters(filters);
+          setState(() => _currentIndex = 0); // Return to list view after applying filters
+        },
+        activeFilters: _activeFilters,
+      );
     } else if (_currentIndex == 3) {
       return ProfilePage();
     }
@@ -496,78 +581,6 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
           ),
         ),
       ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFAFE1F0),
-      body: SafeArea(
-        child: _buildCurrentView(),
-      ),
-      bottomNavigationBar: GestureDetector(
-        onTap: _isBottomBarCollapsed ? () => setState(() => _isBottomBarCollapsed = false) : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: _isBottomBarCollapsed ? 15 : 80,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, -5),
-              ),
-            ],
-          ),
-          child: _isBottomBarCollapsed
-              ? Container()
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.home_outlined,
-                        color: _currentIndex == 0 ? Colors.blue : Colors.grey,
-                      ),
-                      onPressed: () => setState(() => _currentIndex = 0),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.bar_chart,
-                        color: _currentIndex == 1 ? Colors.blue : Colors.grey,
-                      ),
-                      onPressed: () => setState(() => _currentIndex = 1),
-                    ),
-                    Container(
-                      width: 60,
-                      height: 60,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      child: FloatingActionButton(
-                        backgroundColor: Colors.blue,
-                        child: const Icon(Icons.add, size: 30),
-                        onPressed: _addProduct,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.filter_list,
-                        color: _currentIndex == 2 ? Colors.blue : Colors.grey,
-                      ),
-                      onPressed: () => setState(() => _currentIndex = 2),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.person_outline,
-                        color: _currentIndex == 3 ? Colors.blue : Colors.grey,
-                      ),
-                      onPressed: () => setState(() => _currentIndex = 3),
-                    ),
-                  ],
-                ),
-        ),
-      ),
     );
   }
 }
