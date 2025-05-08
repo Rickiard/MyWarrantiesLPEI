@@ -73,6 +73,28 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
   }
 
   Future<void> _deleteProduct() async {
+    // Show confirmation dialog
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Product'),
+        content: const Text('Are you sure you want to delete this product?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
+    // If there's a custom delete handler, use it
     if (widget.onDelete != null) {
       widget.onDelete!();
       return;
@@ -91,6 +113,11 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           .delete();
 
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product deleted successfully')),
+        );
+        
+        // Return true to indicate the product was deleted
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -98,9 +125,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error deleting product: $e')),
         );
-      }
-    } finally {
-      if (mounted) {
         setState(() => _isLoading = false);
       }
     }
@@ -178,9 +202,22 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           IconButton(
             icon: Icon(_isEditing ? Icons.check : Icons.edit),
             onPressed: () {
-              setState(() {
-                _isEditing = !_isEditing;
-              });
+              if (_isEditing) {
+                // Save changes when exiting edit mode
+                _saveProduct().then((_) {
+                  setState(() {
+                    _isEditing = false;
+                  });
+                  
+                  // Return true to indicate the product was updated
+                  Navigator.pop(context, true);
+                });
+              } else {
+                // Enter edit mode
+                setState(() {
+                  _isEditing = true;
+                });
+              }
             },
           ),
         ],

@@ -8,6 +8,7 @@ import 'package:mywarranties/main.dart' as app;
 import 'package:mywarranties/list.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'passwordChange.dart';
+import 'notification_settings.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -1024,6 +1025,62 @@ class _ProfilePageState extends State<ProfilePage> {
                                   },
                                 )),
                           ],
+                        ),
+                      ),
+                      SizedBox(height: 25),
+                      // Notification Settings
+                      Container(
+                        padding: EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 10,
+                              offset: Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => NotificationSettingsPage()),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Row(
+                              children: [
+                                Icon(Icons.notifications, color: Colors.blue),
+                                SizedBox(width: 15),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Notification Settings',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      SizedBox(height: 5),
+                                      Text(
+                                        'Configure warranty expiry notifications',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(Icons.arrow_forward_ios, color: Colors.grey),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                       SizedBox(height: 30),

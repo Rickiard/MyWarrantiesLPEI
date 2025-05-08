@@ -11,6 +11,7 @@ import 'filter.dart';
 import 'statistics.dart';
 import 'productInfo.dart';
 import 'profile.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -129,7 +130,11 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       // Product was added successfully, refresh the list
       setState(() {
         _isBottomBarCollapsed = false;
+        _isLoading = true; // Show loading indicator while refreshing
       });
+      
+      // Reload products from Firestore
+      await _loadProducts();
     }
   }
 
@@ -195,12 +200,48 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
         _allProducts = allProducts;
         _isLoading = false;
       });
+      
+      // Check for warranty expiry dates and schedule notifications
+      _checkWarrantyExpiryDates(allProducts);
     } catch (e) {
       print('Error loading products: $e');
       setState(() {
         _errorMessage = 'Error loading products: $e';
         _isLoading = false;
       });
+    }
+  }
+  
+  Future<void> _checkWarrantyExpiryDates(List<Map<String, dynamic>> products) async {
+    // Initialize the notification service
+    final notificationService = NotificationService();
+    
+    // Check each product for warranty expiry
+    for (var product in products) {
+      final String? purchaseDate = product['purchaseDate'];
+      final String? warrantyPeriod = product['warrantyPeriod'];
+      final String? warrantyExtension = product['warrantyExtension'];
+      
+      if (purchaseDate != null && warrantyPeriod != null) {
+        // Calculate expiry date using the notification service
+        final expiryDate = notificationService.calculateExpiryDate(
+          purchaseDate, 
+          warrantyPeriod, 
+          warrantyExtension
+        );
+        
+        if (expiryDate != null) {
+          // Add expiry date to the product data for display
+          product['expiryDate'] = '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
+          
+          // Calculate days until expiry
+          final now = DateTime.now();
+          final daysUntilExpiry = expiryDate.difference(now).inDays;
+          
+          // Add days until expiry to the product data for display
+          product['daysUntilExpiry'] = daysUntilExpiry;
+        }
+      }
     }
   }
 
@@ -270,6 +311,127 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       return 9999; // Arbitrary large number to represent lifetime
     }
     return 0;
+  }
+  
+  bool _isWarrantyExpiringSoon(Map<String, dynamic> product) {
+    try {
+      final String? purchaseDate = product['purchaseDate'];
+      final String? warrantyPeriod = product['warrantyPeriod'];
+      final String? warrantyExtension = product['warrantyExtension'];
+      
+      if (purchaseDate == null || warrantyPeriod == null) return false;
+      
+      final purchaseDateTime = DateTime.parse(purchaseDate);
+      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      
+      final now = DateTime.now();
+      final daysUntilExpiry = expiryDate.difference(now).inDays;
+      
+      // Return true if warranty expires within 30 days or has already expired
+      return daysUntilExpiry <= 30;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  Color _getExpiryTextColor(Map<String, dynamic> product) {
+    try {
+      final String? purchaseDate = product['purchaseDate'];
+      final String? warrantyPeriod = product['warrantyPeriod'];
+      final String? warrantyExtension = product['warrantyExtension'];
+      
+      if (purchaseDate == null || warrantyPeriod == null) return Colors.black;
+      
+      final purchaseDateTime = DateTime.parse(purchaseDate);
+      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      
+      final now = DateTime.now();
+      final daysUntilExpiry = expiryDate.difference(now).inDays;
+      
+      if (daysUntilExpiry < 0) {
+        return Colors.red; // Already expired
+      } else if (daysUntilExpiry <= 1) {
+        return Colors.red; // Expires today or tomorrow
+      } else if (daysUntilExpiry <= 7) {
+        return Colors.orange; // Expires within a week
+      } else if (daysUntilExpiry <= 30) {
+        return Colors.amber[700]!; // Expires within a month
+      }
+      
+      return Colors.black; // Not expiring soon
+    } catch (e) {
+      return Colors.black;
+    }
+  }
+  
+  Color _getExpiryBadgeColor(Map<String, dynamic> product) {
+    try {
+      final String? purchaseDate = product['purchaseDate'];
+      final String? warrantyPeriod = product['warrantyPeriod'];
+      final String? warrantyExtension = product['warrantyExtension'];
+      
+      if (purchaseDate == null || warrantyPeriod == null) return Colors.grey;
+      
+      final purchaseDateTime = DateTime.parse(purchaseDate);
+      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      
+      final now = DateTime.now();
+      final daysUntilExpiry = expiryDate.difference(now).inDays;
+      
+      if (daysUntilExpiry < 0) {
+        return Colors.red[700]!; // Already expired
+      } else if (daysUntilExpiry <= 1) {
+        return Colors.red; // Expires today or tomorrow
+      } else if (daysUntilExpiry <= 7) {
+        return Colors.orange; // Expires within a week
+      } else if (daysUntilExpiry <= 30) {
+        return Colors.amber[700]!; // Expires within a month
+      }
+      
+      return Colors.green; // Not expiring soon
+    } catch (e) {
+      return Colors.grey;
+    }
+  }
+  
+  String _getExpiryBadgeText(Map<String, dynamic> product) {
+    try {
+      final String? purchaseDate = product['purchaseDate'];
+      final String? warrantyPeriod = product['warrantyPeriod'];
+      final String? warrantyExtension = product['warrantyExtension'];
+      
+      if (purchaseDate == null || warrantyPeriod == null) return '';
+      
+      final purchaseDateTime = DateTime.parse(purchaseDate);
+      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      
+      final now = DateTime.now();
+      final daysUntilExpiry = expiryDate.difference(now).inDays;
+      
+      if (daysUntilExpiry < 0) {
+        return 'EXPIRED';
+      } else if (daysUntilExpiry == 0) {
+        return 'EXPIRES TODAY';
+      } else if (daysUntilExpiry == 1) {
+        return 'EXPIRES TOMORROW';
+      } else if (daysUntilExpiry <= 7) {
+        return '$daysUntilExpiry DAYS LEFT';
+      } else if (daysUntilExpiry <= 30) {
+        return '$daysUntilExpiry DAYS LEFT';
+      }
+      
+      return '';
+    } catch (e) {
+      return '';
+    }
   }
 
   @override
@@ -442,7 +604,14 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(builder: (context) => AddProductPage()),
-                                        ).then((_) => _loadProducts());
+                                        ).then((result) {
+                                          if (result == true) {
+                                            setState(() {
+                                              _isLoading = true;
+                                            });
+                                            _loadProducts();
+                                          }
+                                        });
                                       },
                                       icon: Icon(Icons.add),
                                       label: Text('Add Your First Product'),
@@ -461,13 +630,21 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                               itemBuilder: (context, index) {
                                 final product = _products[index];
                                 return GestureDetector(
-                                  onTap: () {
-                                    Navigator.push(
+                                  onTap: () async {
+                                    final result = await Navigator.push(
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) => ProductInfoPage(product: product),
                                       ),
                                     );
+                                    
+                                    // If the product was updated or deleted, refresh the list
+                                    if (result == true) {
+                                      setState(() {
+                                        _isLoading = true;
+                                      });
+                                      await _loadProducts();
+                                    }
                                   },
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(
@@ -525,11 +702,35 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                                       fontSize: 16,
                                                     ),
                                                   ),
-                                                  Text(
-                                                    'Expires: ${_calculateExpiryDate(product['purchaseDate'], product['warrantyPeriod'], product['warrantyExtension'])}',
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 16,
-                                                    ),
+                                                  Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Text(
+                                                          'Expires: ${_calculateExpiryDate(product['purchaseDate'], product['warrantyPeriod'], product['warrantyExtension'])}',
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 16,
+                                                            color: _getExpiryTextColor(product),
+                                                            fontWeight: _isWarrantyExpiringSoon(product) ? FontWeight.bold : FontWeight.normal,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      if (_isWarrantyExpiringSoon(product))
+                                                        Container(
+                                                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                          decoration: BoxDecoration(
+                                                            color: _getExpiryBadgeColor(product),
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                          child: Text(
+                                                            _getExpiryBadgeText(product),
+                                                            style: TextStyle(
+                                                              color: Colors.white,
+                                                              fontWeight: FontWeight.bold,
+                                                              fontSize: 12,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
                                                   ),
                                                 ],
                                               ),
