@@ -29,29 +29,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Helper function to convert Firebase errors to user-friendly messages
-  String _getReadableErrorMessage(dynamic error) {
-    if (error is FirebaseAuthException) {
-      switch (error.code) {
-        case 'user-not-found':
-          return 'No account found with this email. Please check your email or register.'; 
-        case 'wrong-password':
-          return 'Incorrect password. Please try again.';
-        case 'invalid-email':
-          return 'Please enter a valid email address.';
-        case 'user-disabled':
-          return 'This account has been disabled. Please contact support.';
-        case 'too-many-requests':
-          return 'Too many unsuccessful login attempts. Please try again later.';
-        case 'network-request-failed':
-          return 'Network error. Please check your internet connection.';
-        default:
-          return 'Login failed. Please try again later.';
-      }
-    }
-    return 'Login failed. Please try again later.';
-  }
-
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
@@ -208,11 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         if (email.isEmpty || password.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text("Please enter your email and password to log in."),
-                              backgroundColor: Colors.amber[700],
-                              behavior: SnackBarBehavior.floating,
-                            ),
+                            SnackBar(content: Text("Please fill in both email and password.")),
                           );
                           return;
                         }
@@ -252,11 +225,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             }, SetOptions(merge: true));
 
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text("Welcome back, ${user.email}!"),
-                                backgroundColor: Colors.green,
-                                behavior: SnackBarBehavior.floating,
-                              ),
+                              SnackBar(content: Text("Login successful! Welcome, ${user.email}")),
                             );
 
                             SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -273,11 +242,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         } catch (e) {
                           // Exibir mensagem de erro
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(_getReadableErrorMessage(e)),
-                              backgroundColor: Colors.red,
-                              behavior: SnackBarBehavior.floating,
-                            )),
+                            SnackBar(content: Text("Login failed: ${e.toString()}")),
                           );
                         }
                       },

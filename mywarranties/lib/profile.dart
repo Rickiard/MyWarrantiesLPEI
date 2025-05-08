@@ -42,13 +42,13 @@ class _ProfilePageState extends State<ProfilePage> {
   // Clean up any duplicate accounts in SharedPreferences
   Future<void> _cleanupDuplicateAccounts() async {
     try {
-      // Cleaning up duplicate accounts
+      print('Cleaning up duplicate accounts...');
       
       // Get the raw list from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       final linkedAccountsJson = prefs.getStringList('linkedAccounts') ?? [];
       
-
+      print('Found ${linkedAccountsJson.length} accounts in SharedPreferences');
       
       // Process the list to remove duplicates
       final Set<String> emailsAdded = {};
@@ -58,7 +58,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final currentUserEmail = _auth.currentUser?.email?.toLowerCase() ?? '';
       if (currentUserEmail.isNotEmpty) {
         emailsAdded.add(currentUserEmail);
-
+        print('Current user email: $currentUserEmail (will be preserved)');
       }
       
       // First add the current user account
@@ -70,7 +70,7 @@ class _ProfilePageState extends State<ProfilePage> {
           
           if (emailLower == currentUserEmail) {
             uniqueAccounts.add(accountJson);
-
+            print('Preserved current user account: $email');
             break;
           }
         }
@@ -86,21 +86,21 @@ class _ProfilePageState extends State<ProfilePage> {
           if (emailLower != currentUserEmail && !emailsAdded.contains(emailLower)) {
             uniqueAccounts.add(accountJson);
             emailsAdded.add(emailLower);
-
+            print('Preserved unique account: $email');
           } else if (emailLower != currentUserEmail) {
-
+            print('Removed duplicate account: $email');
           }
         }
       }
       
       // Save the cleaned list back to SharedPreferences
       await prefs.setStringList('linkedAccounts', uniqueAccounts);
-
+      print('Saved ${uniqueAccounts.length} unique accounts to SharedPreferences');
       
       // Now load the cleaned accounts into memory
       await _loadLinkedAccounts();
     } catch (e) {
-      // Error occurred during cleanup
+      print('Error cleaning up duplicate accounts: $e');
     }
   }
 
@@ -127,7 +127,7 @@ class _ProfilePageState extends State<ProfilePage> {
         });
       }
     } catch (e) {
-      // Error occurred while loading user data
+      print('Error loading user data: $e');
       setState(() {
         _isLoading = false;
       });
@@ -140,7 +140,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final prefs = await SharedPreferences.getInstance();
       final linkedAccountsJson = prefs.getStringList('linkedAccounts') ?? [];
       
-
+      print('Loading linked accounts: ${linkedAccountsJson.length} accounts found');
       
       final List<Map<String, dynamic>> loadedAccounts = [];
       final Set<String> addedEmails = {}; // Track emails to prevent duplicates
@@ -149,7 +149,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final currentUserEmail = _auth.currentUser?.email?.toLowerCase() ?? '';
       if (currentUserEmail.isNotEmpty) {
         addedEmails.add(currentUserEmail);
-
+        print('Current user email: $currentUserEmail (will be excluded from linked accounts)');
       }
       
       for (String accountJson in linkedAccountsJson) {
@@ -159,11 +159,11 @@ class _ProfilePageState extends State<ProfilePage> {
           final email = parts[0];
           final emailLower = email.toLowerCase();
           
-
+          print('Processing account: $email');
           
           // Skip if this is the current user or if we've already added this email
           if (emailLower == currentUserEmail || addedEmails.contains(emailLower)) {
-
+            print('Skipping account $email (current user or duplicate)');
             continue;
           }
           
@@ -173,25 +173,25 @@ class _ProfilePageState extends State<ProfilePage> {
           
           loadedAccounts.add(account);
           addedEmails.add(emailLower);
-
+          print('Added account: $email to linked accounts');
         }
       }
       
-
+      print('Final linked accounts count: ${loadedAccounts.length}');
       
       setState(() {
         _accounts = loadedAccounts;
       });
     } catch (e) {
-      // Error occurred while loading linked accounts
+      print('Error loading linked accounts: $e');
     }
   }
   
   // Save linked accounts to SharedPreferences
   Future<void> _saveLinkedAccounts() async {
     try {
-
-
+      print('Saving linked accounts...');
+      print('Current accounts in memory: ${_accounts.length}');
       
       final prefs = await SharedPreferences.getInstance();
       final List<String> accountsToSave = [];
@@ -203,7 +203,7 @@ class _ProfilePageState extends State<ProfilePage> {
         final currentUserPassword = prefs.getString('userPassword') ?? '';
         accountsToSave.add('$currentUserEmail:::${_auth.currentUser!.uid}:::$currentUserPassword');
         emailsAdded.add(currentUserEmail.toLowerCase());
-
+        print('Added current user to save list: $currentUserEmail');
       }
       
       // Add other linked accounts (avoiding duplicates)
@@ -212,26 +212,26 @@ class _ProfilePageState extends State<ProfilePage> {
         if (!emailsAdded.contains(email.toLowerCase())) {
           accountsToSave.add('$email:::${account['uid']}:::${account['password']}');
           emailsAdded.add(email.toLowerCase());
-
+          print('Added linked account to save list: $email');
         } else {
-
+          print('Skipping duplicate account: $email');
         }
       }
       
-
+      print('Total accounts to save: ${accountsToSave.length}');
       await prefs.setStringList('linkedAccounts', accountsToSave);
       
       // Verify what was saved
       final savedAccounts = prefs.getStringList('linkedAccounts') ?? [];
-
+      print('Accounts saved to SharedPreferences: ${savedAccounts.length}');
       for (var account in savedAccounts) {
         final parts = account.split(':::');
         if (parts.isNotEmpty) {
-
+          print('Saved account: ${parts[0]}');
         }
       }
     } catch (e) {
-      // Error occurred while saving linked accounts
+      print('Error saving linked accounts: $e');
     }
   }
 
@@ -284,7 +284,7 @@ class _ProfilePageState extends State<ProfilePage> {
             'isLoggedIn': false,
           }, SetOptions(merge: true));
         } catch (e) {
-          // Error occurred while updating user login status
+          print('Error updating user login status: $e');
         }
       }
       
@@ -552,7 +552,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     Navigator.pop(context);
                   }
 
-
+                  print('Adding new account: $email');
                   
                   // Add the validated account to the linked accounts list
                   setState(() {
@@ -568,9 +568,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     
                     // Update the accounts list
                     _accounts = updatedAccounts;
-
+                    print('Updated accounts list after adding: ${_accounts.length} accounts');
                     for (var acc in _accounts) {
-
+                      print('Account in list: ${acc['email']}');
                     }
                   });
                   
@@ -608,7 +608,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       );
                     }
                   } catch (loginError) {
-
+                    print('Error re-authenticating after validation error: $loginError');
                   }
                 }
               },
@@ -848,7 +848,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       final currentPassword = prefs.getString('userPassword') ?? '';
                                       final currentUid = _auth.currentUser?.uid;
                                       
-
+                                      print('Switching from $currentEmail to ${account['email']}');
                                       
                                       // Create a copy of the account we're switching to
                                       final switchToAccount = Map<String, dynamic>.from(account);
@@ -872,15 +872,15 @@ class _ProfilePageState extends State<ProfilePage> {
                                             'uid': currentUid,
                                             'password': currentPassword,
                                           });
-
+                                          print('Added current account to linked accounts: $currentEmail');
                                         } else {
-
+                                          print('Current account already exists in linked accounts: $currentEmail');
                                         }
                                       }
                                       
-
+                                      print('Prepared updated accounts list: ${updatedAccounts.length} accounts');
                                       for (var acc in updatedAccounts) {
-
+                                        print('Account in prepared list: ${acc['email']}');
                                       }
                                       
                                       // We'll update the UI and save to SharedPreferences after the authentication is complete
@@ -964,7 +964,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         );
                                       }
                                     } catch (e) {
-
+                                      print('Error switching account: $e');
                                       
                                       // Close loading dialog
                                       if (Navigator.canPop(context)) {
@@ -997,7 +997,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     ) ?? false;
                                     
                                     if (shouldRemove) {
-
+                                      print('Removing account: ${account['email']}');
                                       
                                       // Create a copy of the account we're removing
                                       final accountToRemove = Map<String, dynamic>.from(account);
@@ -1012,7 +1012,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         
                                         // Update the accounts list
                                         _accounts = updatedAccounts;
-
+                                        print('Updated accounts list after removal: ${_accounts.length} accounts');
                                       });
                                       
                                       // Save updated linked accounts

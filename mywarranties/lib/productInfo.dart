@@ -106,22 +106,14 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Product deleted successfully'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
+          const SnackBar(content: Text('Product deleted successfully')),
         );
         Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Unable to delete product. Please try again later.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text('Error deleting product: $e')),
         );
         setState(() => _isLoading = false);
       }
@@ -138,22 +130,14 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Could not open the file. The file may be missing or in an unsupported format.'),
-              backgroundColor: Colors.amber[700],
-              behavior: SnackBarBehavior.floating,
-            ),
+            const SnackBar(content: Text('Could not open the file')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Unable to open file. Please check if the file exists and try again.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text('Error opening file: $e')),
         );
       }
     }
@@ -617,21 +601,13 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Product updated successfully'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
+          const SnackBar(content: Text('Product updated successfully')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Unable to save product changes. Please try again later.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text('Error saving product: $e')),
         );
       }
     } finally {

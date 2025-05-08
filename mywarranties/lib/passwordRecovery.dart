@@ -31,25 +31,6 @@ class PasswordRecoveryScreen extends StatefulWidget {
 }
 
 class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
-  // Helper function to convert Firebase errors to user-friendly messages
-  String _getReadableErrorMessage(dynamic error) {
-    if (error is FirebaseAuthException) {
-      switch (error.code) {
-        case 'user-not-found':
-          return 'No account found with this email. Please check your email address.';
-        case 'invalid-email':
-          return 'Please enter a valid email address.';
-        case 'missing-email':
-          return 'Please enter your email address.';
-        case 'network-request-failed':
-          return 'Network error. Please check your internet connection and try again.';
-        default:
-          return 'Unable to send password reset email. Please try again later.';
-      }
-    }
-    return 'Unable to send password reset email. Please try again later.';
-  }
-
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
@@ -152,9 +133,8 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                           // Exibe mensagem de sucesso
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Password reset email sent! Please check your inbox.'),
+                              content: Text('Password reset email sent! Check your inbox.'),
                               backgroundColor: Colors.green,
-                              behavior: SnackBarBehavior.floating,
                             ),
                           );
 
@@ -163,9 +143,8 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                           // Exibe mensagem de erro
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(_getReadableErrorMessage(e)),
+                              content: Text('Failed to send password reset email. Please try again.'),
                               backgroundColor: Colors.red,
-                              behavior: SnackBarBehavior.floating,
                             ),
                           );
                         }

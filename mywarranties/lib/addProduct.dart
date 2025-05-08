@@ -184,11 +184,7 @@ class _AddProductPageState extends State<AddProductPage> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unable to add product. Please try again later.'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text('Error adding product: $e')),
       );
     } finally {
       setState(() => _isLoading = false);
