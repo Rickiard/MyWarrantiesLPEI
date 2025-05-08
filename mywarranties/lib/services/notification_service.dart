@@ -361,6 +361,8 @@ class NotificationService {
 
   DateTime? calculateExpiryDate(String purchaseDate, String warrantyPeriod, String? warrantyExtension) {
     try {
+      if (warrantyPeriod.toLowerCase() == 'lifetime') return null;
+      
       final purchaseDateTime = DateTime.parse(purchaseDate);
       final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
       final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
@@ -372,12 +374,17 @@ class NotificationService {
   }
 
   int _parseWarrantyPeriod(String warranty) {
-    if (warranty.toLowerCase().contains('month')) {
-      return int.tryParse(warranty.split(' ')[0]) ?? 0;
-    } else if (warranty.toLowerCase().contains('year')) {
-      return (int.tryParse(warranty.split(' ')[0]) ?? 0) * 12;
-    } else if (warranty.toLowerCase() == 'lifetime') {
-      return 9999; // Arbitrary large number to represent lifetime
+    if (warranty.toLowerCase() == 'lifetime') return 0;
+    final parts = warranty.toLowerCase().split(' ');
+    if (parts.isEmpty) return 0;
+    
+    final value = int.tryParse(parts[0]) ?? 0;
+    if (warranty.contains('day')) {
+      return value ~/ 30; // Convert days to months
+    } else if (warranty.contains('month')) {
+      return value;
+    } else if (warranty.contains('year')) {
+      return value * 12;
     }
     return 0;
   }

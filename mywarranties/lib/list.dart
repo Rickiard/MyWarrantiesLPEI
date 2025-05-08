@@ -291,11 +291,12 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
 
   String _calculateExpiryDate(String? purchaseDate, String? warrantyPeriod, String? warrantyExtension) {
     if (purchaseDate == null || warrantyPeriod == null) return 'Unknown';
+    if (warrantyPeriod.toLowerCase() == 'lifetime') return 'Never expires';
     try {
       final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
       return '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
     } catch (e) {
       return 'Unknown';
@@ -303,33 +304,39 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   }
 
   int _parseWarrantyPeriod(String warranty) {
-    if (warranty.toLowerCase().contains('month')) {
-      return int.tryParse(warranty.split(' ')[0]) ?? 0;
-    } else if (warranty.toLowerCase().contains('year')) {
-      return (int.tryParse(warranty.split(' ')[0]) ?? 0) * 12;
-    } else if (warranty.toLowerCase() == 'lifetime') {
-      return 9999; // Arbitrary large number to represent lifetime
+    if (warranty.toLowerCase() == 'lifetime') return 0; // Return 0 since we handle lifetime separately
+    final parts = warranty.toLowerCase().split(' ');
+    if (parts.isEmpty) return 0;
+    
+    final value = int.tryParse(parts[0]) ?? 0;
+    if (warranty.contains('day')) {
+      return value;
+    } else if (warranty.contains('month')) {
+      return value * 30;
+    } else if (warranty.contains('year')) {
+      return value * 365;
     }
     return 0;
   }
   
   bool _isWarrantyExpiringSoon(Map<String, dynamic> product) {
     try {
-      final String? purchaseDate = product['purchaseDate'];
       final String? warrantyPeriod = product['warrantyPeriod'];
+      if (warrantyPeriod?.toLowerCase() == 'lifetime') return false;
+      
+      final String? purchaseDate = product['purchaseDate'];
       final String? warrantyExtension = product['warrantyExtension'];
       
       if (purchaseDate == null || warrantyPeriod == null) return false;
       
       final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
       
       final now = DateTime.now();
       final daysUntilExpiry = expiryDate.difference(now).inDays;
       
-      // Return true if warranty expires within 30 days or has already expired
       return daysUntilExpiry <= 30;
     } catch (e) {
       return false;
@@ -338,31 +345,33 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   
   Color _getExpiryTextColor(Map<String, dynamic> product) {
     try {
-      final String? purchaseDate = product['purchaseDate'];
       final String? warrantyPeriod = product['warrantyPeriod'];
+      if (warrantyPeriod?.toLowerCase() == 'lifetime') return Colors.green;
+      
+      final String? purchaseDate = product['purchaseDate'];
       final String? warrantyExtension = product['warrantyExtension'];
       
       if (purchaseDate == null || warrantyPeriod == null) return Colors.black;
       
       final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
       
       final now = DateTime.now();
       final daysUntilExpiry = expiryDate.difference(now).inDays;
       
       if (daysUntilExpiry < 0) {
-        return Colors.red; // Already expired
+        return Colors.red;
       } else if (daysUntilExpiry <= 1) {
-        return Colors.red; // Expires today or tomorrow
+        return Colors.red;
       } else if (daysUntilExpiry <= 7) {
-        return Colors.orange; // Expires within a week
+        return Colors.orange;
       } else if (daysUntilExpiry <= 30) {
-        return Colors.amber[700]!; // Expires within a month
+        return Colors.amber[700]!;
       }
       
-      return Colors.black; // Not expiring soon
+      return Colors.black;
     } catch (e) {
       return Colors.black;
     }
@@ -377,9 +386,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       if (purchaseDate == null || warrantyPeriod == null) return Colors.grey;
       
       final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
       
       final now = DateTime.now();
       final daysUntilExpiry = expiryDate.difference(now).inDays;
@@ -402,16 +411,18 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   
   String _getExpiryBadgeText(Map<String, dynamic> product) {
     try {
-      final String? purchaseDate = product['purchaseDate'];
       final String? warrantyPeriod = product['warrantyPeriod'];
+      if (warrantyPeriod?.toLowerCase() == 'lifetime') return '';
+      
+      final String? purchaseDate = product['purchaseDate'];
       final String? warrantyExtension = product['warrantyExtension'];
       
       if (purchaseDate == null || warrantyPeriod == null) return '';
       
       final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
+      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
+      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
       
       final now = DateTime.now();
       final daysUntilExpiry = expiryDate.difference(now).inDays;

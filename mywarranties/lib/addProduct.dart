@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
+import 'list.dart';
 
 class AddProductPage extends StatefulWidget {
   @override
@@ -33,6 +34,11 @@ class _AddProductPageState extends State<AddProductPage> {
   List<String> _brands = [];
   List<String> _stores = [];
   List<String> _warrantyPeriods = [
+    '7 days',
+    '14 days',
+    '30 days',
+    '60 days',
+    '90 days',
     '6 months',
     '1 year',
     '2 years',
@@ -40,7 +46,13 @@ class _AddProductPageState extends State<AddProductPage> {
     '5 years',
     'Lifetime',
   ];
+  
   List<String> _warrantyExtensions = [
+    '7 days',
+    '14 days',
+    '30 days',
+    '60 days',
+    '90 days',
     '6 months',
     '1 year',
     '2 years',
@@ -169,7 +181,12 @@ class _AddProductPageState extends State<AddProductPage> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      Navigator.pop(context, true);
+      // Navigate to list page and remove all previous routes
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => ListPage()),
+        (route) => false,
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error adding product: $e')),
