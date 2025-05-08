@@ -19,18 +19,51 @@ class FilterPage extends StatefulWidget {
 class _FilterPageState extends State<FilterPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _categoryController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _purchaseDateController = TextEditingController();
-  final _warrantyPeriodController = TextEditingController();
-  final _storeDetailsController = TextEditingController();
-  final _brandController = TextEditingController();
-  final _warrantyExtensionController = TextEditingController();
-
+  
+  // Range filter controllers
+  final _minPriceController = TextEditingController();
+  final _maxPriceController = TextEditingController();
+  
+  // Date range controllers
+  DateTime? _startDate;
+  DateTime? _endDate;
+  final _startDateController = TextEditingController();
+  final _endDateController = TextEditingController();
+  
+  // Warranty period range controllers
+  final _minWarrantyPeriodController = TextEditingController();
+  final _maxWarrantyPeriodController = TextEditingController();
+  
+  // Warranty extension range controllers
+  final _minWarrantyExtensionController = TextEditingController();
+  final _maxWarrantyExtensionController = TextEditingController();
+  
+  // Multiple selection controllers
+  List<String> _selectedCategories = [];
+  List<String> _selectedBrands = [];
+  List<String> _selectedStores = [];
+  
+  // Sorting options
+  String _selectedSortField = 'name';
+  bool _sortAscending = true;
+  
+  // Available options
   List<String> _categories = [];
   List<String> _brands = [];
   List<String> _stores = [];
   bool _hasActiveFilters = false;
+  
+  // Available sorting fields
+  final List<Map<String, String>> _sortFields = [
+    {'value': 'name', 'label': 'Product Name'},
+    {'value': 'price', 'label': 'Price'},
+    {'value': 'purchaseDate', 'label': 'Purchase Date'},
+    {'value': 'warrantyPeriod', 'label': 'Warranty Period'},
+    {'value': 'warrantyExtension', 'label': 'Warranty Extension'},
+    {'value': 'category', 'label': 'Category'},
+    {'value': 'brand', 'label': 'Brand'},
+    {'value': 'storeDetails', 'label': 'Store'},
+  ];
 
   @override
   void initState() {
@@ -68,29 +101,75 @@ class _FilterPageState extends State<FilterPage> {
     if (widget.activeFilters != null) {
       setState(() {
         _nameController.text = widget.activeFilters!['name'] ?? '';
-        _categoryController.text = widget.activeFilters!['category'] ?? '';
-        _priceController.text = widget.activeFilters!['price'] ?? '';
-        _purchaseDateController.text = widget.activeFilters!['purchaseDate'] ?? '';
-        _warrantyPeriodController.text = widget.activeFilters!['warrantyPeriod'] ?? '';
-        _storeDetailsController.text = widget.activeFilters!['storeDetails'] ?? '';
-        _brandController.text = widget.activeFilters!['brand'] ?? '';
-        _warrantyExtensionController.text = widget.activeFilters!['warrantyExtension'] ?? '';
+        
+        // Load price range
+        _minPriceController.text = widget.activeFilters!['minPrice'] ?? '';
+        _maxPriceController.text = widget.activeFilters!['maxPrice'] ?? '';
+        
+        // Load date range
+        if (widget.activeFilters!['startDate']?.isNotEmpty ?? false) {
+          _startDateController.text = widget.activeFilters!['startDate'] ?? '';
+          _startDate = DateTime.tryParse(widget.activeFilters!['startDate'] ?? '');
+        }
+        if (widget.activeFilters!['endDate']?.isNotEmpty ?? false) {
+          _endDateController.text = widget.activeFilters!['endDate'] ?? '';
+          _endDate = DateTime.tryParse(widget.activeFilters!['endDate'] ?? '');
+        }
+        
+        // Load warranty period range
+        _minWarrantyPeriodController.text = widget.activeFilters!['minWarrantyPeriod'] ?? '';
+        _maxWarrantyPeriodController.text = widget.activeFilters!['maxWarrantyPeriod'] ?? '';
+        
+        // Load warranty extension range
+        _minWarrantyExtensionController.text = widget.activeFilters!['minWarrantyExtension'] ?? '';
+        _maxWarrantyExtensionController.text = widget.activeFilters!['maxWarrantyExtension'] ?? '';
+        
+        // Load multiple selections
+        if (widget.activeFilters!['categories']?.isNotEmpty ?? false) {
+          _selectedCategories = widget.activeFilters!['categories']!.split(',');
+        }
+        if (widget.activeFilters!['brands']?.isNotEmpty ?? false) {
+          _selectedBrands = widget.activeFilters!['brands']!.split(',');
+        }
+        if (widget.activeFilters!['stores']?.isNotEmpty ?? false) {
+          _selectedStores = widget.activeFilters!['stores']!.split(',');
+        }
+        
+        // Load sorting options
+        _selectedSortField = widget.activeFilters!['sortField'] ?? 'name';
+        _sortAscending = widget.activeFilters!['sortDirection'] == 'desc' ? false : true;
         
         _hasActiveFilters = widget.activeFilters!.values.any((value) => value.isNotEmpty);
       });
     }
   }
 
-  Future<void> _selectDate(BuildContext context) async {
+  Future<void> _selectStartDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: _startDate ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
     if (picked != null) {
       setState(() {
-        _purchaseDateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+        _startDate = picked;
+        _startDateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+      });
+    }
+  }
+
+  Future<void> _selectEndDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _endDate = picked;
+        _endDateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
       });
     }
   }
@@ -99,13 +178,25 @@ class _FilterPageState extends State<FilterPage> {
     if (_formKey.currentState!.validate()) {
       final filters = {
         'name': _nameController.text,
-        'category': _categoryController.text,
-        'price': _priceController.text,
-        'purchaseDate': _purchaseDateController.text,
-        'warrantyPeriod': _warrantyPeriodController.text,
-        'storeDetails': _storeDetailsController.text,
-        'brand': _brandController.text,
-        'warrantyExtension': _warrantyExtensionController.text,
+        // Price range
+        'minPrice': _minPriceController.text,
+        'maxPrice': _maxPriceController.text,
+        // Date range
+        'startDate': _startDateController.text,
+        'endDate': _endDateController.text,
+        // Warranty period range
+        'minWarrantyPeriod': _minWarrantyPeriodController.text,
+        'maxWarrantyPeriod': _maxWarrantyPeriodController.text,
+        // Warranty extension range
+        'minWarrantyExtension': _minWarrantyExtensionController.text,
+        'maxWarrantyExtension': _maxWarrantyExtensionController.text,
+        // Multiple selections
+        'categories': _selectedCategories.isEmpty ? '' : _selectedCategories.join(','),
+        'brands': _selectedBrands.isEmpty ? '' : _selectedBrands.join(','),
+        'stores': _selectedStores.isEmpty ? '' : _selectedStores.join(','),
+        // Sorting options
+        'sortField': _selectedSortField,
+        'sortDirection': _sortAscending ? 'asc' : 'desc',
       };
 
       // Verificar se há algum filtro ativo
@@ -130,39 +221,64 @@ class _FilterPageState extends State<FilterPage> {
   void _clearFilters() {
     setState(() {
       _nameController.clear();
-      _categoryController.clear();
-      _priceController.clear();
-      _purchaseDateController.clear();
-      _warrantyPeriodController.clear();
-      _storeDetailsController.clear();
-      _brandController.clear();
-      _warrantyExtensionController.clear();
+      
+      // Clear price range
+      _minPriceController.clear();
+      _maxPriceController.clear();
+      
+      // Clear date range
+      _startDateController.clear();
+      _endDateController.clear();
+      _startDate = null;
+      _endDate = null;
+      
+      // Clear warranty period range
+      _minWarrantyPeriodController.clear();
+      _maxWarrantyPeriodController.clear();
+      
+      // Clear warranty extension range
+      _minWarrantyExtensionController.clear();
+      _maxWarrantyExtensionController.clear();
+      
+      // Clear multiple selections
+      _selectedCategories.clear();
+      _selectedBrands.clear();
+      _selectedStores.clear();
+      
+      // Reset sorting options to defaults
+      _selectedSortField = 'name';
+      _sortAscending = true;
+      
       _hasActiveFilters = false;
     });
 
-    // Chamar onApplyFilters com filtros vazios
-    widget.onApplyFilters({
-      'name': '',
-      'category': '',
-      'price': '',
-      'purchaseDate': '',
-      'warrantyPeriod': '',
-      'storeDetails': '',
-      'brand': '',
-      'warrantyExtension': '',
-    });
+    // Aplicar filtros limpos
+    widget.onApplyFilters({});
+
+    // Fechar a página
+    Navigator.pop(context);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _categoryController.dispose();
-    _priceController.dispose();
-    _purchaseDateController.dispose();
-    _warrantyPeriodController.dispose();
-    _storeDetailsController.dispose();
-    _brandController.dispose();
-    _warrantyExtensionController.dispose();
+    
+    // Dispose price range controllers
+    _minPriceController.dispose();
+    _maxPriceController.dispose();
+    
+    // Dispose date range controllers
+    _startDateController.dispose();
+    _endDateController.dispose();
+    
+    // Dispose warranty period range controllers
+    _minWarrantyPeriodController.dispose();
+    _maxWarrantyPeriodController.dispose();
+    
+    // Dispose warranty extension range controllers
+    _minWarrantyExtensionController.dispose();
+    _maxWarrantyExtensionController.dispose();
+    
     super.dispose();
   }
 
@@ -204,7 +320,6 @@ class _FilterPageState extends State<FilterPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              
               // Product Name
               TextFormField(
                 controller: _nameController,
@@ -215,191 +330,438 @@ class _FilterPageState extends State<FilterPage> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
                 ),
               ),
               SizedBox(height: 16),
 
-              // Category Dropdown
-              DropdownButtonFormField<String>(
-                value: _categoryController.text.isNotEmpty ? _categoryController.text : null,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Category',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+              // Category Multi-Select
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Categories',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
-                ),
-                items: _categories.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _categoryController.text = value ?? '';
-                  });
-                },
+                  SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _categories.map((category) {
+                        final isSelected = _selectedCategories.contains(category);
+                        return FilterChip(
+                          selected: isSelected,
+                          label: Text(category),
+                          backgroundColor: Colors.white,
+                          selectedColor: Colors.blue.shade100,
+                          checkmarkColor: Colors.blue,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedCategories.add(category);
+                              } else {
+                                _selectedCategories.remove(category);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: 16),
 
-              // Product Price
-              TextFormField(
-                controller: _priceController,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Product Price',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+              // Price Range
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Price Range',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _minPriceController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            labelText: 'Min Price',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _maxPriceController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            labelText: 'Max Price',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                keyboardType: TextInputType.number,
+                ],
               ),
               SizedBox(height: 16),
 
-              // Purchase Date
-              TextFormField(
-                controller: _purchaseDateController,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Purchase Date',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+              // Purchase Date Range
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Purchase Date Range',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _startDateController,
+                          readOnly: true,
+                          onTap: () => _selectStartDate(context),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            labelText: 'From',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            suffixIcon: Icon(Icons.calendar_today),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _endDateController,
+                          readOnly: true,
+                          onTap: () => _selectEndDate(context),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            labelText: 'To',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            suffixIcon: Icon(Icons.calendar_today),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.calendar_today),
-                    onPressed: () => _selectDate(context),
-                  ),
-                ),
-                readOnly: true,
+                ],
               ),
               SizedBox(height: 16),
 
-              // Warranty Period
-              DropdownButtonFormField<String>(
-                value: _warrantyPeriodController.text.isNotEmpty ? _warrantyPeriodController.text : null,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Warranty Period',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+              // Warranty Period Range
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Warranty Period Range (months)',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
-                ),
-                items: [
-                  '6 months',
-                  '1 year',
-                  '2 years',
-                  '3 years',
-                  '5 years',
-                  'Lifetime',
-                ].map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _warrantyPeriodController.text = value ?? '';
-                  });
-                },
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _minWarrantyPeriodController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            labelText: 'Min',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _maxWarrantyPeriodController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            labelText: 'Max',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
               SizedBox(height: 16),
 
-              // Store Dropdown
-              DropdownButtonFormField<String>(
-                value: _storeDetailsController.text.isNotEmpty ? _storeDetailsController.text : null,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Store',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+              // Store Multi-Select
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Stores',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
-                ),
-                items: _stores.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _storeDetailsController.text = value ?? '';
-                  });
-                },
+                  SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _stores.map((store) {
+                        final isSelected = _selectedStores.contains(store);
+                        return FilterChip(
+                          selected: isSelected,
+                          label: Text(store),
+                          backgroundColor: Colors.white,
+                          selectedColor: Colors.blue.shade100,
+                          checkmarkColor: Colors.blue,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedStores.add(store);
+                              } else {
+                                _selectedStores.remove(store);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: 16),
 
-              // Brand Dropdown
-              DropdownButtonFormField<String>(
-                value: _brandController.text.isNotEmpty ? _brandController.text : null,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Brand',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+              // Brand Multi-Select
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Brands',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
-                ),
-                items: _brands.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _brandController.text = value ?? '';
-                  });
-                },
+                  SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _brands.map((brand) {
+                        final isSelected = _selectedBrands.contains(brand);
+                        return FilterChip(
+                          selected: isSelected,
+                          label: Text(brand),
+                          backgroundColor: Colors.white,
+                          selectedColor: Colors.blue.shade100,
+                          checkmarkColor: Colors.blue,
+                          onSelected: (selected) {
+                            setState(() {
+                              if (selected) {
+                                _selectedBrands.add(brand);
+                              } else {
+                                _selectedBrands.remove(brand);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: 16),
 
-              // Warranty Extension
-              DropdownButtonFormField<String>(
-                value: _warrantyExtensionController.text.isNotEmpty ? _warrantyExtensionController.text : null,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'Warranty Extension',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+              // Warranty Extension Range
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Warranty Extension Range (months)',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
-                ),
-                items: [
-                  '6 months',
-                  '1 year',
-                  '2 years',
-                  '3 years',
-                  '5 years',
-                ].map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _warrantyExtensionController.text = value ?? '';
-                  });
-                },
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _minWarrantyExtensionController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            labelText: 'Min',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _maxWarrantyExtensionController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            labelText: 'Max',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              
+              // Sort Options
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sort By',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    child: Column(
+                      children: [
+                        DropdownButtonFormField<String>(
+                          value: _selectedSortField,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            labelText: 'Sort Field',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          ),
+                          items: _sortFields.map((field) {
+                            return DropdownMenuItem<String>(
+                              value: field['value'],
+                              child: Text(field['label']!),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedSortField = value ?? 'name';
+                            });
+                          },
+                        ),
+                        Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Row(
+                            children: [
+                              Text('Sort Direction:'),
+                              Spacer(),
+                              ToggleButtons(
+                                borderRadius: BorderRadius.circular(8),
+                                selectedBorderColor: Colors.blue,
+                                selectedColor: Colors.white,
+                                fillColor: Colors.blue,
+                                color: Colors.grey[600],
+                                constraints: BoxConstraints(minHeight: 36, minWidth: 80),
+                                isSelected: [_sortAscending, !_sortAscending],
+                                onPressed: (index) {
+                                  setState(() {
+                                    _sortAscending = index == 0;
+                                  });
+                                },
+                                children: [
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 16),
+                                    child: Text('A to Z'),
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 16),
+                                    child: Text('Z to A'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               SizedBox(height: 16),
 
