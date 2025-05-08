@@ -4,7 +4,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'addProduct.dart';
 
 class ProductInfoPage extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -26,26 +25,21 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
   List<String> _categories = [];
   List<String> _brands = [];
   List<String> _stores = [];
-  List<String> _warrantyPeriods = [
-    '6 months',
-    '1 year',
-    '2 years',
-    '3 years',
-    '5 years',
-    'Lifetime',
-  ];
-  List<String> _warrantyExtensions = [
-    '6 months',
-    '1 year',
-    '2 years',
-    '3 years',
-    '5 years',
-  ];
+  final _warrantyUnitController = TextEditingController();
+  final _warrantyExtensionUnitController = TextEditingController();
+  final List<String> _timeUnits = ['days', 'months', 'years', 'lifetime'];
 
   @override
   void initState() {
     super.initState();
     _loadOptions();
+  }
+
+  @override
+  void dispose() {
+    _warrantyUnitController.dispose();
+    _warrantyExtensionUnitController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadOptions() async {
@@ -73,7 +67,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
   }
 
   Future<void> _deleteProduct() async {
-    // Show confirmation dialog
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -94,7 +87,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
 
     if (shouldDelete != true) return;
 
-    // If there's a custom delete handler, use it
     if (widget.onDelete != null) {
       widget.onDelete!();
       return;
@@ -116,8 +108,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Product deleted successfully')),
         );
-        
-        // Return true to indicate the product was deleted
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -132,7 +122,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
 
   Future<void> _launchUrl(String? url) async {
     if (url == null || url.isEmpty) return;
-    
+
     try {
       final uri = Uri.parse(url);
       if (await canLaunchUrl(uri)) {
@@ -150,19 +140,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           SnackBar(content: Text('Error opening file: $e')),
         );
       }
-    }
-  }
-
-  String _calculateExpiryDate(String? purchaseDate, String? warrantyPeriod, String? warrantyExtension) {
-    if (purchaseDate == null || warrantyPeriod == null) return '';
-    try {
-      final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyMonths = int.tryParse(warrantyPeriod) ?? 0;
-      final extensionMonths = int.tryParse(warrantyExtension ?? '0') ?? 0;
-      final expiryDate = purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
-      return '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
-    } catch (e) {
-      return '';
     }
   }
 
@@ -190,6 +167,92 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
     }
   }
 
+  Widget _buildWarrantyPeriodInput(String label, String valueKey, String unitKey, bool isEnabled) {
+    final existingPeriod = widget.product[valueKey]?.toString() ?? '';
+    final isLifetime = existingPeriod.toLowerCase() == 'lifetime';
+    int? value;
+    String unit = 'days';
+
+    if (!isLifetime && existingPeriod.isNotEmpty) {
+      final parts = existingPeriod.toLowerCase().split(' ');
+      if (parts.length >= 2) {
+        value = int.tryParse(parts[0]);
+        if (parts[1].startsWith('year')) unit = 'years';
+        else if (parts[1].startsWith('month')) unit = 'months';
+        else if (parts[1].startsWith('day')) unit = 'days';
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: TextFormField(
+                initialValue: isLifetime ? null : value?.toString(),
+                enabled: isEnabled && !isLifetime,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  labelText: 'Value',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                validator: (v) {
+                  if (!isLifetime) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    final num = int.tryParse(v);
+                    if (num == null || num <= 0) return 'Invalid value';
+                  }
+                  return null;
+                },
+                onChanged: (value) {
+                  final unit = widget.product[unitKey] ?? 'days';
+                  if (value.isNotEmpty) {
+                    widget.product[valueKey] = '$value $unit';
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: DropdownButtonFormField<String>(
+                value: isLifetime ? 'lifetime' : unit,
+                items: _timeUnits.map((unit) {
+                  return DropdownMenuItem(
+                    value: unit,
+                    child: Text(unit.substring(0, 1).toUpperCase() + unit.substring(1)),
+                  );
+                }).toList(),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onChanged: isEnabled ? (newUnit) {
+                  setState(() {
+                    if (newUnit == 'lifetime') {
+                      widget.product[valueKey] = 'Lifetime';
+                    } else {
+                      final value = widget.product[valueKey]?.toString().split(' ')[0] ?? '0';
+                      widget.product[valueKey] = '$value $newUnit';
+                    }
+                    widget.product[unitKey] = newUnit;
+                  });
+                } : null,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -203,17 +266,13 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
             icon: Icon(_isEditing ? Icons.check : Icons.edit),
             onPressed: () {
               if (_isEditing) {
-                // Save changes when exiting edit mode
                 _saveProduct().then((_) {
                   setState(() {
                     _isEditing = false;
                   });
-                  
-                  // Return true to indicate the product was updated
                   Navigator.pop(context, true);
                 });
               } else {
-                // Enter edit mode
                 setState(() {
                   _isEditing = true;
                 });
@@ -229,7 +288,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Add Photo
               GestureDetector(
                 onTap: _isEditing ? _pickImage : null,
                 child: Container(
@@ -260,7 +318,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
               ),
               const SizedBox(height: 16),
 
-              // Text Fields
               TextFormField(
                 initialValue: widget.product['name'],
                 decoration: InputDecoration(
@@ -317,7 +374,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
               ),
               const SizedBox(height: 16),
 
-              _buildDropdownWithAddOption('Warranty Period', _warrantyPeriods, widget.product, 'warrantyPeriod', _isEditing),
+              _buildWarrantyPeriodInput('Warranty Period', 'warrantyPeriod', 'warrantyUnit', _isEditing),
               const SizedBox(height: 16),
 
               SwitchListTile(
@@ -329,13 +386,14 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                           _isWarrantyExtensionActivated = value;
                           if (!value) {
                             widget.product['warrantyExtension'] = '';
+                            widget.product['warrantyExtensionUnit'] = '';
                           }
                         });
                       }
                     : null,
               ),
               if (_isWarrantyExtensionActivated)
-                _buildDropdownWithAddOption('Warranty Extension', _warrantyExtensions, widget.product, 'warrantyExtension', _isEditing),
+                _buildWarrantyPeriodInput('Warranty Extension', 'warrantyExtension', 'warrantyExtensionUnit', _isEditing),
               const SizedBox(height: 16),
 
               _buildDropdownWithAddOption('Store Details', _stores, widget.product, 'storeDetails', _isEditing),
@@ -361,7 +419,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
               const Text('View and Upload Documents', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
 
-              // Receipt View and Upload
               Row(
                 children: [
                   Expanded(
@@ -411,7 +468,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
               ),
               const SizedBox(height: 8),
 
-              // Warranty View and Upload
               Row(
                 children: [
                   Expanded(
@@ -461,7 +517,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
               ),
               const SizedBox(height: 8),
 
-              // Other Documents View and Upload
               Row(
                 children: [
                   Expanded(

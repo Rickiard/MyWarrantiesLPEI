@@ -17,12 +17,14 @@ class _AddProductPageState extends State<AddProductPage> {
   final _categoryController = TextEditingController();
   final _priceController = TextEditingController();
   final _purchaseDateController = TextEditingController();
-  final _warrantyPeriodController = TextEditingController();
+  final _warrantyValueController = TextEditingController();
+  final _warrantyUnitController = TextEditingController();
+  final _warrantyExtensionValueController = TextEditingController();
+  final _warrantyExtensionUnitController = TextEditingController();
   final _storeDetailsController = TextEditingController();
   final _brandController = TextEditingController();
   final _notesController = TextEditingController();
-  final _warrantyExtensionController = TextEditingController();
-  
+
   File? _productImage;
   File? _receiptFile;
   File? _warrantyFile;
@@ -33,32 +35,9 @@ class _AddProductPageState extends State<AddProductPage> {
   List<String> _categories = [];
   List<String> _brands = [];
   List<String> _stores = [];
-  List<String> _warrantyPeriods = [
-    '7 days',
-    '14 days',
-    '30 days',
-    '60 days',
-    '90 days',
-    '6 months',
-    '1 year',
-    '2 years',
-    '3 years',
-    '5 years',
-    'Lifetime',
-  ];
-  
-  List<String> _warrantyExtensions = [
-    '7 days',
-    '14 days',
-    '30 days',
-    '60 days',
-    '90 days',
-    '6 months',
-    '1 year',
-    '2 years',
-    '3 years',
-    '5 years',
-  ];
+  final List<String> _timeUnits = ['days', 'months', 'years', 'lifetime'];
+  String _selectedWarrantyUnit = 'days';
+  String _selectedExtensionUnit = 'days';
 
   @override
   void initState() {
@@ -158,6 +137,20 @@ class _AddProductPageState extends State<AddProductPage> {
         otherDocsUrl = await _uploadFile(_otherDocuments!, 'documents/${user.uid}/${DateTime.now()}_other.pdf');
       }
 
+      // Format warranty period
+      String warrantyPeriod;
+      if (_selectedWarrantyUnit == 'lifetime') {
+        warrantyPeriod = 'Lifetime';
+      } else {
+        warrantyPeriod = '${_warrantyValueController.text} ${_selectedWarrantyUnit}';
+      }
+
+      // Format warranty extension
+      String? warrantyExtension;
+      if (_isWarrantyExtensionActivated && _warrantyExtensionValueController.text.isNotEmpty) {
+        warrantyExtension = '${_warrantyExtensionValueController.text} ${_selectedExtensionUnit}';
+      }
+
       // Add to Firestore
       await FirebaseFirestore.instance
           .collection('users')
@@ -168,11 +161,13 @@ class _AddProductPageState extends State<AddProductPage> {
         'category': _categoryController.text,
         'price': _priceController.text,
         'purchaseDate': _purchaseDateController.text,
-        'warrantyPeriod': _warrantyPeriodController.text,
+        'warrantyPeriod': warrantyPeriod,
+        'warrantyUnit': _selectedWarrantyUnit,
+        'warrantyExtension': warrantyExtension,
+        'warrantyExtensionUnit': _isWarrantyExtensionActivated ? _selectedExtensionUnit : null,
         'storeDetails': _storeDetailsController.text,
         'brand': _brandController.text,
         'notes': _notesController.text,
-        'warrantyExtension': _isWarrantyExtensionActivated ? _warrantyExtensionController.text : null,
         'imageUrl': imageUrl,
         'receiptUrl': receiptUrl,
         'warrantyUrl': warrantyUrl,
@@ -256,6 +251,66 @@ class _AddProductPageState extends State<AddProductPage> {
             }
           },
           child: Text('Add New $label'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWarrantyPeriodInput(String label, TextEditingController valueController, String unit, Function(String?) onUnitChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: TextFormField(
+                controller: valueController,
+                enabled: unit != 'lifetime',
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  labelText: 'Value',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                validator: (v) {
+                  if (unit != 'lifetime') {
+                    if (v == null || v.isEmpty) return 'Required';
+                    final num = int.tryParse(v);
+                    if (num == null || num <= 0) return 'Invalid value';
+                  }
+                  return null;
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: DropdownButtonFormField<String>(
+                value: unit,
+                items: _timeUnits.map((unit) {
+                  return DropdownMenuItem(
+                    value: unit,
+                    child: Text(unit.substring(0, 1).toUpperCase() + unit.substring(1)),
+                  );
+                }).toList(),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onChanged: (newUnit) {
+                  if (newUnit == 'lifetime') {
+                    valueController.clear();
+                  }
+                  onUnitChanged(newUnit);
+                },
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -353,7 +408,12 @@ class _AddProductPageState extends State<AddProductPage> {
               ),
               SizedBox(height: 16),
 
-              _buildDropdownWithAddOption('Warranty Period', _warrantyPeriods, _warrantyPeriodController),
+              _buildWarrantyPeriodInput(
+                'Warranty Period', 
+                _warrantyValueController,
+                _selectedWarrantyUnit,
+                (unit) => setState(() => _selectedWarrantyUnit = unit ?? 'days'),
+              ),
               SizedBox(height: 16),
 
               SwitchListTile(
@@ -363,13 +423,19 @@ class _AddProductPageState extends State<AddProductPage> {
                   setState(() {
                     _isWarrantyExtensionActivated = value;
                     if (!value) {
-                      _warrantyExtensionController.text = '';
+                      _warrantyExtensionValueController.clear();
+                      _selectedExtensionUnit = 'days';
                     }
                   });
                 },
               ),
               if (_isWarrantyExtensionActivated)
-                _buildDropdownWithAddOption('Warranty Extension', _warrantyExtensions, _warrantyExtensionController),
+                _buildWarrantyPeriodInput(
+                  'Warranty Extension',
+                  _warrantyExtensionValueController,
+                  _selectedExtensionUnit,
+                  (unit) => setState(() => _selectedExtensionUnit = unit ?? 'days'),
+                ),
               SizedBox(height: 16),
 
               _buildDropdownWithAddOption('Store Details', _stores, _storeDetailsController),
@@ -460,11 +526,13 @@ class _AddProductPageState extends State<AddProductPage> {
     _categoryController.dispose();
     _priceController.dispose();
     _purchaseDateController.dispose();
-    _warrantyPeriodController.dispose();
+    _warrantyValueController.dispose();
+    _warrantyUnitController.dispose();
+    _warrantyExtensionValueController.dispose();
+    _warrantyExtensionUnitController.dispose();
     _storeDetailsController.dispose();
     _brandController.dispose();
     _notesController.dispose();
-    _warrantyExtensionController.dispose();
     super.dispose();
   }
 }
