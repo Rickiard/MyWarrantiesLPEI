@@ -34,6 +34,27 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  // Helper function to convert Firebase errors to user-friendly messages
+  String _getReadableErrorMessage(dynamic error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'email-already-in-use':
+          return 'An account already exists with this email address.'; 
+        case 'weak-password':
+          return 'The password is too weak. Please use a stronger password.';
+        case 'invalid-email':
+          return 'Please enter a valid email address.';
+        case 'operation-not-allowed':
+          return 'Account creation is currently disabled. Please try again later.';
+        case 'network-request-failed':
+          return 'Network error. Please check your internet connection.';
+        default:
+          return 'Failed to create account. Please try again later.';
+      }
+    }
+    return 'Failed to create account. Please try again later.';
+  }
+
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _repeatPasswordController = TextEditingController(); 
@@ -183,21 +204,33 @@ Widget build(BuildContext context) {
 
                         if (email.isEmpty || password.isEmpty || repeatPassword.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Please fill in all fields.")),
+                            SnackBar(
+                              content: Text("Please fill in all fields to create your account."),
+                              backgroundColor: Colors.amber[700],
+                              behavior: SnackBarBehavior.floating,
+                            ),
                           );
                           return;
                         }
 
                         if (!EmailValidator.validate(email)) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Invalid email format.")),
+                            SnackBar(
+                              content: Text("Please enter a valid email address."),
+                              backgroundColor: Colors.amber[700],
+                              behavior: SnackBarBehavior.floating,
+                            ),
                           );
                           return;
                         }
 
                         if (password != repeatPassword) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Passwords do not match.")),
+                            SnackBar(
+                              content: Text("The passwords you entered don't match. Please try again."),
+                              backgroundColor: Colors.amber[700],
+                              behavior: SnackBarBehavior.floating,
+                            ),
                           );
                           return;
                         }
@@ -220,7 +253,11 @@ Widget build(BuildContext context) {
                             });
 
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Account created successfully!")),
+                              SnackBar(
+                                content: Text("Your account has been created successfully! You can now log in."),
+                                backgroundColor: Colors.green,
+                                behavior: SnackBarBehavior.floating,
+                              ),
                             );
 
                             // Redirecionar para a tela principal ou de login
@@ -232,7 +269,11 @@ Widget build(BuildContext context) {
                         } catch (e) {
                           // Exibir mensagem de erro
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Failed to create account: ${e.toString()}")),
+                            SnackBar(
+                              content: Text(_getReadableErrorMessage(e)),
+                              backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                            )),
                           );
                         }
                       },

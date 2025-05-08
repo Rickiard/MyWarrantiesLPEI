@@ -47,7 +47,7 @@ void callbackDispatcher() {
       }
       return Future.value(true);
     } catch (e) {
-      print('Background task error: $e');
+      // Background task error occurred
       return Future.value(false);
     }
   });

@@ -57,7 +57,7 @@ class NotificationService {
       provisional: false,
     );
 
-    print('User granted permission: ${settings.authorizationStatus}');
+
 
     // Request permission for local notifications on Android
     // Note: For newer versions of the plugin, we would use requestPermission()
@@ -120,7 +120,7 @@ class NotificationService {
       final Map<String, dynamic> data = json.decode(response.payload!);
       
       // You can navigate to a specific screen here based on the payload
-      print('Notification tapped with payload: $data');
+
       
       // Example: Navigate to product details page
       // Navigator.of(context).push(MaterialPageRoute(
@@ -132,7 +132,7 @@ class NotificationService {
   Future<void> _initializeFirebaseMessaging() async {
     // Get the token
     String? token = await _firebaseMessaging.getToken();
-    print('FCM Token: $token');
+
 
     // Save the token to Firestore
     if (token != null && _auth.currentUser != null) {
@@ -154,11 +154,11 @@ class NotificationService {
 
     // Handle foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('Got a message whilst in the foreground!');
-      print('Message data: ${message.data}');
+
+
 
       if (message.notification != null) {
-        print('Message also contained a notification: ${message.notification}');
+
         
         // Show a local notification
         _showLocalNotification(
@@ -316,12 +316,12 @@ class NotificationService {
               }
             }
           } catch (e) {
-            print('Error calculating expiry date for product ${doc.id}: $e');
+            // Error calculating expiry date
           }
         }
       }
     } catch (e) {
-      print('Error checking warranties: $e');
+      // Error checking warranties
     }
   }
 
@@ -368,7 +368,7 @@ class NotificationService {
       final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
       return purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
     } catch (e) {
-      print('Error calculating expiry date: $e');
+      // Error calculating expiry date
       return null;
     }
   }
@@ -398,7 +398,7 @@ class NotificationService {
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // This function will handle background messages
-  print('Handling a background message: ${message.messageId}');
+  // Handling a background message
   
   // Initialize Firebase if needed
   await Firebase.initializeApp(
