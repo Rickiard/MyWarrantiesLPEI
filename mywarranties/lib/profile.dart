@@ -7,7 +7,6 @@ import 'dart:io';
 import 'package:mywarranties/main.dart' as app;
 import 'package:mywarranties/list.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'passwordChange.dart';
 import 'notification_settings.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -325,14 +324,7 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     }
   }
-
-  void _changePassword() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => PasswordChangeScreen()),
-    );
-  }
-
+  
   Widget _buildInfoRow({
     required IconData icon,
     required String label,
@@ -740,48 +732,6 @@ class _ProfilePageState extends State<ProfilePage> {
                               value: _email,
                             ),
                             Divider(),
-                            // Password Field with Change Option
-                            InkWell(
-                              onTap: _changePassword,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.lock, color: Colors.blue),
-                                    SizedBox(width: 15),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Password',
-                                            style: TextStyle(
-                                              color: Colors.grey[600],
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                          SizedBox(height: 5),
-                                          Text(
-                                            _password,
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Text(
-                                      'Change',
-                                      style: TextStyle(
-                                        color: Colors.blue,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ),
