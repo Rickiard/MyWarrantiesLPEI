@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:mywarranties/main.dart' as app;
+import 'package:mywarranties/list.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'passwordChange.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -17,7 +18,6 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
   bool _isLoading = true;
   String _username = '';
@@ -30,12 +30,77 @@ class _ProfilePageState extends State<ProfilePage> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
   
-
-  
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    // Clean up any duplicate accounts that might be in SharedPreferences
+    _cleanupDuplicateAccounts();
+  }
+  
+  // Clean up any duplicate accounts in SharedPreferences
+  Future<void> _cleanupDuplicateAccounts() async {
+    try {
+      print('Cleaning up duplicate accounts...');
+      
+      // Get the raw list from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final linkedAccountsJson = prefs.getStringList('linkedAccounts') ?? [];
+      
+      print('Found ${linkedAccountsJson.length} accounts in SharedPreferences');
+      
+      // Process the list to remove duplicates
+      final Set<String> emailsAdded = {};
+      final List<String> uniqueAccounts = [];
+      
+      // Get current user email (if any)
+      final currentUserEmail = _auth.currentUser?.email?.toLowerCase() ?? '';
+      if (currentUserEmail.isNotEmpty) {
+        emailsAdded.add(currentUserEmail);
+        print('Current user email: $currentUserEmail (will be preserved)');
+      }
+      
+      // First add the current user account
+      for (String accountJson in linkedAccountsJson) {
+        final parts = accountJson.split(':::');
+        if (parts.length >= 3) {
+          final email = parts[0];
+          final emailLower = email.toLowerCase();
+          
+          if (emailLower == currentUserEmail) {
+            uniqueAccounts.add(accountJson);
+            print('Preserved current user account: $email');
+            break;
+          }
+        }
+      }
+      
+      // Then add all other unique accounts
+      for (String accountJson in linkedAccountsJson) {
+        final parts = accountJson.split(':::');
+        if (parts.length >= 3) {
+          final email = parts[0];
+          final emailLower = email.toLowerCase();
+          
+          if (emailLower != currentUserEmail && !emailsAdded.contains(emailLower)) {
+            uniqueAccounts.add(accountJson);
+            emailsAdded.add(emailLower);
+            print('Preserved unique account: $email');
+          } else if (emailLower != currentUserEmail) {
+            print('Removed duplicate account: $email');
+          }
+        }
+      }
+      
+      // Save the cleaned list back to SharedPreferences
+      await prefs.setStringList('linkedAccounts', uniqueAccounts);
+      print('Saved ${uniqueAccounts.length} unique accounts to SharedPreferences');
+      
+      // Now load the cleaned accounts into memory
+      await _loadLinkedAccounts();
+    } catch (e) {
+      print('Error cleaning up duplicate accounts: $e');
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -50,6 +115,9 @@ class _ProfilePageState extends State<ProfilePage> {
       // Get current user email
       final User? user = _auth.currentUser;
       if (user != null) {
+        // Load linked accounts from SharedPreferences
+        await _loadLinkedAccounts();
+        
         setState(() {
           _email = user.email ?? 'No email found';
           // Extract username from email (part before @)
@@ -62,6 +130,107 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+  
+  // Load linked accounts from SharedPreferences
+  Future<void> _loadLinkedAccounts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final linkedAccountsJson = prefs.getStringList('linkedAccounts') ?? [];
+      
+      print('Loading linked accounts: ${linkedAccountsJson.length} accounts found');
+      
+      final List<Map<String, dynamic>> loadedAccounts = [];
+      final Set<String> addedEmails = {}; // Track emails to prevent duplicates
+      
+      // Get current user email (if any)
+      final currentUserEmail = _auth.currentUser?.email?.toLowerCase() ?? '';
+      if (currentUserEmail.isNotEmpty) {
+        addedEmails.add(currentUserEmail);
+        print('Current user email: $currentUserEmail (will be excluded from linked accounts)');
+      }
+      
+      for (String accountJson in linkedAccountsJson) {
+        final Map<String, dynamic> account = {};
+        final parts = accountJson.split(':::');
+        if (parts.length >= 3) {
+          final email = parts[0];
+          final emailLower = email.toLowerCase();
+          
+          print('Processing account: $email');
+          
+          // Skip if this is the current user or if we've already added this email
+          if (emailLower == currentUserEmail || addedEmails.contains(emailLower)) {
+            print('Skipping account $email (current user or duplicate)');
+            continue;
+          }
+          
+          account['email'] = email;
+          account['uid'] = parts[1];
+          account['password'] = parts[2];
+          
+          loadedAccounts.add(account);
+          addedEmails.add(emailLower);
+          print('Added account: $email to linked accounts');
+        }
+      }
+      
+      print('Final linked accounts count: ${loadedAccounts.length}');
+      
+      setState(() {
+        _accounts = loadedAccounts;
+      });
+    } catch (e) {
+      print('Error loading linked accounts: $e');
+    }
+  }
+  
+  // Save linked accounts to SharedPreferences
+  Future<void> _saveLinkedAccounts() async {
+    try {
+      print('Saving linked accounts...');
+      print('Current accounts in memory: ${_accounts.length}');
+      
+      final prefs = await SharedPreferences.getInstance();
+      final List<String> accountsToSave = [];
+      final Set<String> emailsAdded = {}; // Track emails to prevent duplicates
+      
+      // Add current user to the list first
+      if (_auth.currentUser != null && _auth.currentUser!.email != null) {
+        final currentUserEmail = _auth.currentUser!.email!;
+        final currentUserPassword = prefs.getString('userPassword') ?? '';
+        accountsToSave.add('$currentUserEmail:::${_auth.currentUser!.uid}:::$currentUserPassword');
+        emailsAdded.add(currentUserEmail.toLowerCase());
+        print('Added current user to save list: $currentUserEmail');
+      }
+      
+      // Add other linked accounts (avoiding duplicates)
+      for (var account in _accounts) {
+        final email = account['email'] as String;
+        if (!emailsAdded.contains(email.toLowerCase())) {
+          accountsToSave.add('$email:::${account['uid']}:::${account['password']}');
+          emailsAdded.add(email.toLowerCase());
+          print('Added linked account to save list: $email');
+        } else {
+          print('Skipping duplicate account: $email');
+        }
+      }
+      
+      print('Total accounts to save: ${accountsToSave.length}');
+      await prefs.setStringList('linkedAccounts', accountsToSave);
+      
+      // Verify what was saved
+      final savedAccounts = prefs.getStringList('linkedAccounts') ?? [];
+      print('Accounts saved to SharedPreferences: ${savedAccounts.length}');
+      for (var account in savedAccounts) {
+        final parts = account.split(':::');
+        if (parts.isNotEmpty) {
+          print('Saved account: ${parts[0]}');
+        }
+      }
+    } catch (e) {
+      print('Error saving linked accounts: $e');
     }
   }
 
@@ -95,7 +264,33 @@ class _ProfilePageState extends State<ProfilePage> {
   // Método separado para realizar o logout sem bloquear a UI
   void _performLogout() async {
     try {
-      // Limpar SharedPreferences
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+      
+      // Update user status in Firestore if user is logged in
+      if (_auth.currentUser != null) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(_auth.currentUser!.uid)
+              .set({
+            'isLoggedIn': false,
+          }, SetOptions(merge: true));
+        } catch (e) {
+          print('Error updating user login status: $e');
+        }
+      }
+      
+      // Sign out from Firebase
+      await _auth.signOut();
+      
+      // Clear SharedPreferences except linked accounts
       final prefs = await SharedPreferences.getInstance();
       prefs.setBool('isLoggedIn', false);
       prefs.remove('userEmail');
@@ -103,13 +298,25 @@ class _ProfilePageState extends State<ProfilePage> {
       prefs.remove('accessToken');
       prefs.remove('idToken');
       
-      // Navegar para a tela principal imediatamente
+      // Keep linkedAccounts in SharedPreferences for future logins
+      
+      // Close loading dialog
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      // Navigate to the welcome screen
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => app.MyApp()),
         (route) => false,
       );
     } catch (e) {
+      // Close loading dialog if it's open
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error during logout: $e')),
@@ -229,10 +436,15 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _showAddAccountDialog() {
+    // Reset controllers
+    _emailController.clear();
+    _passwordController.clear();
+    _isPasswordVisible = false;
+    
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+        builder: (context, setDialogState) => AlertDialog(
           title: Text('Add Account'),
           content: SingleChildScrollView(
             child: Column(
@@ -257,7 +469,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
                       ),
                       onPressed: () {
-                        setState(() {
+                        setDialogState(() {
                           _isPasswordVisible = !_isPasswordVisible;
                         });
                       },
@@ -276,46 +488,127 @@ class _ProfilePageState extends State<ProfilePage> {
               onPressed: () async {
                 final email = _emailController.text.trim();
                 final password = _passwordController.text.trim();
+                
+                // Check if account is already linked or is the current account
+                if (email == _auth.currentUser?.email) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('This account is already active')),
+                  );
+                  Navigator.of(context).pop();
+                  return;
+                }
+                
+                for (var account in _accounts) {
+                  if (account['email'] == email) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('This account is already linked')),
+                    );
+                    Navigator.of(context).pop();
+                    return;
+                  }
+                }
 
                 try {
+                  // Show loading indicator
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                  
+                  // Save current user credentials
+                  final prefs = await SharedPreferences.getInstance();
+                  final currentEmail = _auth.currentUser?.email ?? '';
+                  final currentPassword = prefs.getString('userPassword') ?? '';
+                  final currentUid = _auth.currentUser?.uid;
+                  
+                  // Sign out from the current account
+                  await FirebaseAuth.instance.signOut();
+                  
                   // Temporarily sign in to validate the credentials
                   final tempUserCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
                     email: email,
                     password: password,
                   );
+                  
+                  final newUid = tempUserCredential.user?.uid;
 
                   // Immediately sign out the validated account
                   await FirebaseAuth.instance.signOut();
 
-                  // Re-authenticate the current user using SharedPreferences
-                  final prefs = await SharedPreferences.getInstance();
-                  final currentEmail = prefs.getString('userEmail') ?? '';
-                  final currentPassword = prefs.getString('userPassword') ?? '';
-
+                  // Re-authenticate the current user
                   if (currentEmail.isNotEmpty && currentPassword.isNotEmpty) {
                     await FirebaseAuth.instance.signInWithEmailAndPassword(
                       email: currentEmail,
                       password: currentPassword,
                     );
                   }
+                  
+                  // Close loading dialog
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  }
 
+                  print('Adding new account: $email');
+                  
                   // Add the validated account to the linked accounts list
                   setState(() {
-                    _accounts.add({
+                    // Make a copy of the current accounts list
+                    final updatedAccounts = List<Map<String, dynamic>>.from(_accounts);
+                    
+                    // Add the new account
+                    updatedAccounts.add({
                       'email': email,
-                      'uid': tempUserCredential.user?.uid,
+                      'uid': newUid,
                       'password': password, // Store password for switching accounts
                     });
+                    
+                    // Update the accounts list
+                    _accounts = updatedAccounts;
+                    print('Updated accounts list after adding: ${_accounts.length} accounts');
+                    for (var acc in _accounts) {
+                      print('Account in list: ${acc['email']}');
+                    }
                   });
+                  
+                  // Save updated linked accounts
+                  await _saveLinkedAccounts();
 
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Account added successfully!')),
                   );
+                  
+                  // Refresh the profile page to ensure the UI is updated
+                  setState(() {});
                 } catch (e) {
+                  // Close loading dialog if it's open
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  }
+                  
+                  // Show error message
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Invalid credentials: $e')),
                   );
+                  
+                  // If an error occurred during validation, make sure we're logged back in
+                  try {
+                    final prefs = await SharedPreferences.getInstance();
+                    final currentEmail = prefs.getString('userEmail') ?? '';
+                    final currentPassword = prefs.getString('userPassword') ?? '';
+                    
+                    if (currentEmail.isNotEmpty && currentPassword.isNotEmpty) {
+                      await FirebaseAuth.instance.signInWithEmailAndPassword(
+                        email: currentEmail,
+                        password: currentPassword,
+                      );
+                    }
+                  } catch (loginError) {
+                    print('Error re-authenticating after validation error: $loginError');
+                  }
                 }
               },
               child: Text('Add'),
@@ -351,6 +644,13 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -532,39 +832,195 @@ class _ProfilePageState extends State<ProfilePage> {
                                   isActive: false,
                                   onSwitch: () async {
                                     try {
-                                      // Switch to the selected account
+                                      // Show loading indicator
+                                      showDialog(
+                                        context: context,
+                                        barrierDismissible: false,
+                                        builder: (context) => Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                      );
+                                      
+                                      // Get current user info to add to linked accounts
+                                      final currentEmail = _auth.currentUser?.email ?? '';
+                                      final prefs = await SharedPreferences.getInstance();
+                                      final currentPassword = prefs.getString('userPassword') ?? '';
+                                      final currentUid = _auth.currentUser?.uid;
+                                      
+                                      print('Switching from $currentEmail to ${account['email']}');
+                                      
+                                      // Create a copy of the account we're switching to
+                                      final switchToAccount = Map<String, dynamic>.from(account);
+                                      
+                                      // Prepare the updated accounts list but don't update the UI yet
+                                      final updatedAccounts = List<Map<String, dynamic>>.from(_accounts);
+                                      
+                                      // Remove the account we're switching to from linked accounts
+                                      updatedAccounts.removeWhere((a) => 
+                                        a['email'].toString().toLowerCase() == switchToAccount['email'].toString().toLowerCase());
+                                      
+                                      // Add the previous account to linked accounts if it's valid and not already in the list
+                                      if (currentEmail.isNotEmpty && currentPassword.isNotEmpty) {
+                                        // Check if this account is already in the list
+                                        final accountExists = updatedAccounts.any((a) => 
+                                          a['email'].toString().toLowerCase() == currentEmail.toLowerCase());
+                                        
+                                        if (!accountExists) {
+                                          updatedAccounts.add({
+                                            'email': currentEmail,
+                                            'uid': currentUid,
+                                            'password': currentPassword,
+                                          });
+                                          print('Added current account to linked accounts: $currentEmail');
+                                        } else {
+                                          print('Current account already exists in linked accounts: $currentEmail');
+                                        }
+                                      }
+                                      
+                                      print('Prepared updated accounts list: ${updatedAccounts.length} accounts');
+                                      for (var acc in updatedAccounts) {
+                                        print('Account in prepared list: ${acc['email']}');
+                                      }
+                                      
+                                      // We'll update the UI and save to SharedPreferences after the authentication is complete
+                                      
+                                      // Completely sign out the current user
                                       await FirebaseAuth.instance.signOut();
-                                      await FirebaseAuth.instance.signInWithEmailAndPassword(
+                                      
+                                      // Sign in with the new account using the login logic from login.dart
+                                      final UserCredential userCredential = await FirebaseAuth.instance
+                                          .signInWithEmailAndPassword(
                                         email: account['email'],
                                         password: account['password'],
                                       );
-
-                                      setState(() {
-                                        _email = account['email'];
-                                        _accounts.remove(account);
-                                        _accounts.add({
-                                          'email': _email,
-                                          'uid': account['uid'],
-                                          'password': account['password'],
+                                      
+                                      final User? user = userCredential.user;
+                                      
+                                      if (user != null) {
+                                        // Check if the account is already logged in on another device
+                                        final idTokenResult = await user.getIdTokenResult(true);
+                                        final claims = idTokenResult.claims;
+                                        
+                                        if (claims != null && claims['isLoggedIn'] == true) {
+                                          // Send notification to the other device
+                                          await FirebaseFirestore.instance
+                                              .collection('notifications')
+                                              .doc(user.uid)
+                                              .set({
+                                            'message': 'You have been logged out because your account was accessed on another device.',
+                                            'timestamp': FieldValue.serverTimestamp(),
+                                          });
+                                        }
+                                        
+                                        // Update login state for the current device
+                                        await FirebaseFirestore.instance
+                                            .collection('users')
+                                            .doc(user.uid)
+                                            .set({
+                                          'isLoggedIn': true,
+                                        }, SetOptions(merge: true));
+                                        
+                                        // Update SharedPreferences with new user credentials
+                                        await prefs.setString('userEmail', account['email']);
+                                        await prefs.setString('userPassword', account['password']);
+                                        await prefs.setBool('isLoggedIn', true);
+                                        
+                                        // Clear any other authentication tokens
+                                        await prefs.remove('accessToken');
+                                        await prefs.remove('idToken');
+                                        
+                                        // Now that authentication is complete, update the UI state
+                                        // This prevents the UI from showing duplicate accounts during the transition
+                                        setState(() {
+                                          _accounts = updatedAccounts;
+                                          _email = user.email ?? account['email'];
+                                          _username = _email.split('@')[0];
                                         });
-                                      });
-
+                                        
+                                        // We'll save to SharedPreferences after authentication is complete
+                                      }
+                                      
+                                      // Close loading dialog
+                                      if (Navigator.canPop(context)) {
+                                        Navigator.pop(context);
+                                      }
+                                      
+                                      // Show success message
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(content: Text('Switched to ${account['email']}')),
                                       );
+                                      
+                                      // Use a slightly longer delay before navigation to ensure Firebase Auth has completed its operations
+                                      // This helps prevent the loading screen from getting stuck
+                                      await Future.delayed(Duration(milliseconds: 500));
+                                      
+                                      // Navigate directly to the ListPage to show the new user's content
+                                      if (mounted) {
+                                        // Navigate to the ListPage, removing all previous routes
+                                        Navigator.of(context).pushAndRemoveUntil(
+                                          MaterialPageRoute(builder: (context) => ListPage()),
+                                          (route) => false,
+                                        );
+                                      }
                                     } catch (e) {
+                                      print('Error switching account: $e');
+                                      
+                                      // Close loading dialog
+                                      if (Navigator.canPop(context)) {
+                                        Navigator.pop(context);
+                                      }
+                                      
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(content: Text('Failed to switch account: $e')),
                                       );
                                     }
                                   },
-                                  onRemove: () {
-                                    setState(() {
-                                      _accounts.remove(account);
-                                    });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('${account['email']} removed from linked accounts')),
-                                    );
+                                  onRemove: () async {
+                                    // Show confirmation dialog
+                                    final shouldRemove = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: Text('Remove Account'),
+                                        content: Text('Are you sure you want to remove ${account['email']} from linked accounts?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.of(context).pop(false),
+                                            child: Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.of(context).pop(true),
+                                            child: Text('Remove', style: TextStyle(color: Colors.red)),
+                                          ),
+                                        ],
+                                      ),
+                                    ) ?? false;
+                                    
+                                    if (shouldRemove) {
+                                      print('Removing account: ${account['email']}');
+                                      
+                                      // Create a copy of the account we're removing
+                                      final accountToRemove = Map<String, dynamic>.from(account);
+                                      
+                                      setState(() {
+                                        // Make a copy of the current accounts list
+                                        final updatedAccounts = List<Map<String, dynamic>>.from(_accounts);
+                                        
+                                        // Remove the account by email (case insensitive)
+                                        updatedAccounts.removeWhere((a) => 
+                                          a['email'].toString().toLowerCase() == accountToRemove['email'].toString().toLowerCase());
+                                        
+                                        // Update the accounts list
+                                        _accounts = updatedAccounts;
+                                        print('Updated accounts list after removal: ${_accounts.length} accounts');
+                                      });
+                                      
+                                      // Save updated linked accounts
+                                      await _saveLinkedAccounts();
+                                      
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('${accountToRemove['email']} removed from linked accounts')),
+                                      );
+                                    }
                                   },
                                 )),
                           ],

@@ -29,67 +29,85 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   Future<bool> _loadLoginStatus() async {
-    // Obtém uma instância do SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-
-    // Verifica se o utilizador está marcado como logado
-    final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-
-    if (isLoggedIn) {
-      // Se o utilizador está marcado como logado, verifica se o token de autenticação existe
-      final userPassword = prefs.getString('userPassword');
-      final userEmail = prefs.getString('userEmail');
-      final userAcessToken = prefs.getString('accessToken');
-      final userIdToken = await prefs.getString('idToken');
-
-      if (userPassword != null && userEmail != null) {
-        try {
-          final AuthCredential credential = EmailAuthProvider.credential(
-            email: userEmail,
-            password: userPassword,
-          );
-
-          // Realiza o login novamente com as credenciais
-          await FirebaseAuth.instance.signInWithCredential(credential);
-
-          // Retorna true se o login for bem-sucedido
-          return true;
-        } catch (e) {
-          // Em caso de erro, o token pode estar inválido ou expirado
-          // Limpa os dados de login e retorna false
-          await prefs.setBool('isLoggedIn', false);
-          await prefs.remove('userPassword');
-          await prefs.remove('userEmail');
-          return false;
-        }
-      } else if (userAcessToken != null && userIdToken != null) {
-        try {
-          final AuthCredential credential = GoogleAuthProvider.credential(
-            accessToken: userAcessToken,
-            idToken: userIdToken,
-          );
-
-          // Realiza o login novamente com as credenciais
-          await FirebaseAuth.instance.signInWithCredential(credential);
-
-          // Retorna true se o login for bem-sucedido
-          return true;
-        } catch (e) {
-          // Em caso de erro, o token pode estar inválido ou expirado
-          // Limpa os dados de login e retorna false
-          await prefs.setBool('isLoggedIn', false);
-          await prefs.remove('userPassword');
-          await prefs.remove('userEmail');
-          return false;
-        }
-      } else {
-        await prefs.setBool('isLoggedIn', false);
-        return false;
+    try {
+      // Check if a user is already signed in
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        // User is already signed in, no need to re-authenticate
+        return true;
       }
+      
+      // Obtém uma instância do SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+  
+      // Verifica se o utilizador está marcado como logado
+      final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+  
+      if (isLoggedIn) {
+        // Se o utilizador está marcado como logado, verifica se o token de autenticação existe
+        final userPassword = prefs.getString('userPassword');
+        final userEmail = prefs.getString('userEmail');
+        final userAcessToken = prefs.getString('accessToken');
+        final userIdToken = prefs.getString('idToken');
+  
+        if (userPassword != null && userEmail != null) {
+          try {
+            // Sign out any existing user first to ensure clean state
+            await FirebaseAuth.instance.signOut();
+            
+            // Realiza o login com as credenciais de email/password
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+              email: userEmail,
+              password: userPassword,
+            );
+  
+            // Retorna true se o login for bem-sucedido
+            return true;
+          } catch (e) {
+            print('Error signing in with email/password: $e');
+            // Em caso de erro, o token pode estar inválido ou expirado
+            // Limpa os dados de login e retorna false
+            await prefs.setBool('isLoggedIn', false);
+            await prefs.remove('userPassword');
+            await prefs.remove('userEmail');
+            return false;
+          }
+        } else if (userAcessToken != null && userIdToken != null) {
+          try {
+            // Sign out any existing user first to ensure clean state
+            await FirebaseAuth.instance.signOut();
+            
+            final AuthCredential credential = GoogleAuthProvider.credential(
+              accessToken: userAcessToken,
+              idToken: userIdToken,
+            );
+  
+            // Realiza o login novamente com as credenciais
+            await FirebaseAuth.instance.signInWithCredential(credential);
+  
+            // Retorna true se o login for bem-sucedido
+            return true;
+          } catch (e) {
+            print('Error signing in with Google: $e');
+            // Em caso de erro, o token pode estar inválido ou expirado
+            // Limpa os dados de login e retorna false
+            await prefs.setBool('isLoggedIn', false);
+            await prefs.remove('accessToken');
+            await prefs.remove('idToken');
+            return false;
+          }
+        } else {
+          await prefs.setBool('isLoggedIn', false);
+          return false;
+        }
+      }
+  
+      // Se o utilizador não estiver marcado como logado, retorna false
+      return false;
+    } catch (e) {
+      print('Unexpected error in _loadLoginStatus: $e');
+      return false;
     }
-
-    // Se o utilizador não estiver marcado como logado, retorna false
-    return false;
   }
 
   @override
@@ -97,22 +115,30 @@ class MyApp extends StatelessWidget {
     return FutureBuilder<bool>(
       future: _loadLoginStatus(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: ThemeData(primarySwatch: Colors.blue),
-            home: LoadingScreen(),
-          );
-        } else {
-          final isLoggedIn = snapshot.data ?? false;
-          return MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: ThemeData(primarySwatch: Colors.blue),
-            home: isLoggedIn ? ListPage() : WelcomeScreen(),
-          );
-        }
+        // Always show the MaterialApp with consistent theme
+        final MaterialApp app = MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(primarySwatch: Colors.blue),
+          home: _buildHomeScreen(snapshot),
+        );
+        
+        return app;
       },
     );
+  }
+  
+  Widget _buildHomeScreen(AsyncSnapshot<bool> snapshot) {
+    // Handle different states of the authentication process
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return LoadingScreen();
+    } else if (snapshot.hasError) {
+      print('Error in authentication: ${snapshot.error}');
+      // If there's an error, show the welcome screen
+      return WelcomeScreen();
+    } else {
+      final isLoggedIn = snapshot.data ?? false;
+      return isLoggedIn ? ListPage() : WelcomeScreen();
+    }
   }
 }
 

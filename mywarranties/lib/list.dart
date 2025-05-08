@@ -407,28 +407,52 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                         )
                       : _products.isEmpty
                           ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'No results found.',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w400,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 30.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.inventory_2_outlined,
+                                      size: 80,
+                                      color: Colors.blue.withOpacity(0.7),
                                     ),
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    "Add this product to MyWarranties so you don't forget the warranty.",
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w400,
+                                    SizedBox(height: 20),
+                                    Text(
+                                      'Your product list is empty',
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
+                                    SizedBox(height: 12),
+                                    Text(
+                                      "Add products to MyWarranties to keep track of your warranties and never miss an expiration date again.",
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: 16,
+                                        height: 1.4,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    SizedBox(height: 30),
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (context) => AddProductPage()),
+                                        ).then((_) => _loadProducts());
+                                      },
+                                      icon: Icon(Icons.add),
+                                      label: Text('Add Your First Product'),
+                                      style: ElevatedButton.styleFrom(
+                                        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                        textStyle: TextStyle(fontSize: 16),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             )
                           : ListView.builder(
