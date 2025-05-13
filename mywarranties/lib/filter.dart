@@ -228,66 +228,137 @@ class _FilterPageState extends State<FilterPage> {
   }
 
   void _applyFilters() {
+    // Validate all form fields
     if (_formKey.currentState!.validate()) {
-      // Format warranty period with units
-      String minWarrantyPeriod = '';
-      String maxWarrantyPeriod = '';
-      if (_minWarrantyPeriodUnit == 'lifetime') {
-        minWarrantyPeriod = 'lifetime';
-      } else if (_minWarrantyPeriodController.text.isNotEmpty) {
-        minWarrantyPeriod = '${_minWarrantyPeriodController.text} ${_minWarrantyPeriodUnit}';
-      }
-      if (_maxWarrantyPeriodUnit == 'lifetime') {
-        maxWarrantyPeriod = 'lifetime';
-      } else if (_maxWarrantyPeriodController.text.isNotEmpty) {
-        maxWarrantyPeriod = '${_maxWarrantyPeriodController.text} ${_maxWarrantyPeriodUnit}';
-      }
+      try {
+        // Format warranty period with units
+        String minWarrantyPeriod = '';
+        String maxWarrantyPeriod = '';
+        if (_minWarrantyPeriodUnit == 'lifetime') {
+          minWarrantyPeriod = 'lifetime';
+        } else if (_minWarrantyPeriodController.text.isNotEmpty) {
+          // Validate numeric input
+          if (int.tryParse(_minWarrantyPeriodController.text) != null) {
+            minWarrantyPeriod = '${_minWarrantyPeriodController.text} ${_minWarrantyPeriodUnit}';
+          }
+        }
+        if (_maxWarrantyPeriodUnit == 'lifetime') {
+          maxWarrantyPeriod = 'lifetime';
+        } else if (_maxWarrantyPeriodController.text.isNotEmpty) {
+          // Validate numeric input
+          if (int.tryParse(_maxWarrantyPeriodController.text) != null) {
+            maxWarrantyPeriod = '${_maxWarrantyPeriodController.text} ${_maxWarrantyPeriodUnit}';
+          }
+        }
 
-      // Format warranty extension with units
-      String minWarrantyExtension = '';
-      String maxWarrantyExtension = '';
-      if (_minWarrantyExtensionUnit == 'lifetime') {
-        minWarrantyExtension = 'lifetime';
-      } else if (_minWarrantyExtensionController.text.isNotEmpty) {
-        minWarrantyExtension = '${_minWarrantyExtensionController.text} ${_minWarrantyExtensionUnit}';
+        // Format warranty extension with units
+        String minWarrantyExtension = '';
+        String maxWarrantyExtension = '';
+        if (_minWarrantyExtensionUnit == 'lifetime') {
+          minWarrantyExtension = 'lifetime';
+        } else if (_minWarrantyExtensionController.text.isNotEmpty) {
+          // Validate numeric input
+          if (int.tryParse(_minWarrantyExtensionController.text) != null) {
+            minWarrantyExtension = '${_minWarrantyExtensionController.text} ${_minWarrantyExtensionUnit}';
+          }
+        }
+        if (_maxWarrantyExtensionUnit == 'lifetime') {
+          maxWarrantyExtension = 'lifetime';
+        } else if (_maxWarrantyExtensionController.text.isNotEmpty) {
+          // Validate numeric input
+          if (int.tryParse(_maxWarrantyExtensionController.text) != null) {
+            maxWarrantyExtension = '${_maxWarrantyExtensionController.text} ${_maxWarrantyExtensionUnit}';
+          }
+        }
+
+        // Validate price inputs
+        String minPrice = '';
+        String maxPrice = '';
+        if (_minPriceController.text.isNotEmpty) {
+          // Ensure it's a valid number
+          if (double.tryParse(_minPriceController.text) != null) {
+            minPrice = _minPriceController.text.trim();
+          }
+        }
+        if (_maxPriceController.text.isNotEmpty) {
+          // Ensure it's a valid number
+          if (double.tryParse(_maxPriceController.text) != null) {
+            maxPrice = _maxPriceController.text.trim();
+          }
+        }
+
+        // Validate date range
+        String startDate = _startDateController.text;
+        String endDate = _endDateController.text;
+        if (startDate.isNotEmpty && endDate.isNotEmpty) {
+          final start = DateTime.tryParse(startDate);
+          final end = DateTime.tryParse(endDate);
+          if (start != null && end != null && start.isAfter(end)) {
+            // Invalid date range, reset dates
+            startDate = '';
+            endDate = '';
+            // Show error message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Invalid date range: Start date must be before end date'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+        }
+
+        final filters = {
+          'name': _nameController.text.trim(),
+          'minPrice': minPrice,
+          'maxPrice': maxPrice,
+          'startDate': startDate,
+          'endDate': endDate,
+          'minWarrantyPeriod': minWarrantyPeriod,
+          'maxWarrantyPeriod': maxWarrantyPeriod,
+          'minWarrantyExtension': minWarrantyExtension,
+          'maxWarrantyExtension': maxWarrantyExtension,
+          'categories': _selectedCategories.isEmpty ? '' : _selectedCategories.join(','),
+          'brands': _selectedBrands.isEmpty ? '' : _selectedBrands.join(','),
+          'stores': _selectedStores.isEmpty ? '' : _selectedStores.join(','),
+          'sortField': _selectedSortField,
+          'sortDirection': _sortAscending ? 'asc' : 'desc',
+        };
+
+        // Check if any filters are active
+        bool hasActiveFilters = filters.values.any((value) => value.isNotEmpty);
+        
+        setState(() {
+          _hasActiveFilters = hasActiveFilters;
+        });
+
+        widget.onApplyFilters(filters);
+        
+        // Show snackbar indicating filters were applied
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(hasActiveFilters ? 'Filters applied successfully!' : 'All filters cleared'),
+            backgroundColor: hasActiveFilters ? Colors.green : Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } catch (e) {
+        // Handle any unexpected errors
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error applying filters: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
-      if (_maxWarrantyExtensionUnit == 'lifetime') {
-        maxWarrantyExtension = 'lifetime';
-      } else if (_maxWarrantyExtensionController.text.isNotEmpty) {
-        maxWarrantyExtension = '${_maxWarrantyExtensionController.text} ${_maxWarrantyExtensionUnit}';
-      }
-
-      final filters = {
-        'name': _nameController.text.trim(),
-        'minPrice': _minPriceController.text.trim(),
-        'maxPrice': _maxPriceController.text.trim(),
-        'startDate': _startDateController.text,
-        'endDate': _endDateController.text,
-        'minWarrantyPeriod': minWarrantyPeriod,
-        'maxWarrantyPeriod': maxWarrantyPeriod,
-        'minWarrantyExtension': minWarrantyExtension,
-        'maxWarrantyExtension': maxWarrantyExtension,
-        'categories': _selectedCategories.isEmpty ? '' : _selectedCategories.join(','),
-        'brands': _selectedBrands.isEmpty ? '' : _selectedBrands.join(','),
-        'stores': _selectedStores.isEmpty ? '' : _selectedStores.join(','),
-        'sortField': _selectedSortField,
-        'sortDirection': _sortAscending ? 'asc' : 'desc',
-      };
-
-      // Check if any filters are active
-      bool hasActiveFilters = filters.values.any((value) => value.isNotEmpty);
-      
-      setState(() {
-        _hasActiveFilters = hasActiveFilters;
-      });
-
-      widget.onApplyFilters(filters);
-      
-      // Show snackbar indicating filters were applied
+    } else {
+      // Form validation failed, show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(hasActiveFilters ? 'Filters applied successfully!' : 'All filters cleared'),
-          backgroundColor: hasActiveFilters ? Colors.green : Colors.blue,
+          content: Text('Please fix the errors in the form before applying filters'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
         ),
       );
     }
@@ -438,15 +509,11 @@ class _FilterPageState extends State<FilterPage> {
               // Filters Section
               _buildSectionHeader('Categories'),
               const SizedBox(height: 8),
-              _buildFilterChipsContainer(_categories, _selectedCategories, (category, selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedCategories.add(category);
-                  } else {
-                    _selectedCategories.remove(category);
-                  }
-                });
-              }),
+              _buildFilterChipsContainer(
+                _categories, 
+                _selectedCategories, 
+                (category, selected) => _updateSelectedCategories(category, selected)
+              ),
               const SizedBox(height: 24),
 
               _buildSectionHeader('Price Range'),
@@ -471,35 +538,27 @@ class _FilterPageState extends State<FilterPage> {
                 _maxWarrantyPeriodController,
                 _minWarrantyPeriodUnit,
                 _maxWarrantyPeriodUnit,
-                (value) => setState(() => _minWarrantyPeriodUnit = value ?? 'days'),
-                (value) => setState(() => _maxWarrantyPeriodUnit = value ?? 'days'),
+                (value) => _updateMinWarrantyPeriodUnit(value),
+                (value) => _updateMaxWarrantyPeriodUnit(value),
               ),
               const SizedBox(height: 24),
 
               _buildSectionHeader('Stores'),
               const SizedBox(height: 8),
-              _buildFilterChipsContainer(_stores, _selectedStores, (store, selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedStores.add(store);
-                  } else {
-                    _selectedStores.remove(store);
-                  }
-                });
-              }),
+              _buildFilterChipsContainer(
+                _stores, 
+                _selectedStores, 
+                (store, selected) => _updateSelectedStores(store, selected)
+              ),
               const SizedBox(height: 24),
 
               _buildSectionHeader('Brands'),
               const SizedBox(height: 8),
-              _buildFilterChipsContainer(_brands, _selectedBrands, (brand, selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedBrands.add(brand);
-                  } else {
-                    _selectedBrands.remove(brand);
-                  }
-                });
-              }),
+              _buildFilterChipsContainer(
+                _brands, 
+                _selectedBrands, 
+                (brand, selected) => _updateSelectedBrands(brand, selected)
+              ),
               const SizedBox(height: 24),
 
               _buildSectionHeader('Warranty Extension Range'),
@@ -509,8 +568,8 @@ class _FilterPageState extends State<FilterPage> {
                 _maxWarrantyExtensionController,
                 _minWarrantyExtensionUnit,
                 _maxWarrantyExtensionUnit,
-                (value) => setState(() => _minWarrantyExtensionUnit = value ?? 'days'),
-                (value) => setState(() => _maxWarrantyExtensionUnit = value ?? 'days'),
+                (value) => _updateMinWarrantyExtensionUnit(value),
+                (value) => _updateMaxWarrantyExtensionUnit(value),
               ),
               const SizedBox(height: 24),
 
@@ -721,7 +780,31 @@ class _FilterPageState extends State<FilterPage> {
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(color: Colors.grey.shade300),
               ),
+              errorStyle: TextStyle(color: Colors.red[700]),
+              helperText: ' ', // Adds space for error message
             ),
+            validator: (value) {
+              if (value != null && value.isNotEmpty) {
+                // Check if input is a valid number
+                if (double.tryParse(value) == null) {
+                  return 'Enter a valid number';
+                }
+                
+                // Check if input is non-negative
+                if (double.parse(value) < 0) {
+                  return 'Must be non-negative';
+                }
+                
+                // Check if min is less than max (if max has a value)
+                if (maxController.text.isNotEmpty) {
+                  final double? maxValue = double.tryParse(maxController.text);
+                  if (maxValue != null && double.parse(value) > maxValue) {
+                    return 'Min must be ≤ Max';
+                  }
+                }
+              }
+              return null;
+            },
           ),
         ),
         const SizedBox(width: 16),
@@ -742,7 +825,31 @@ class _FilterPageState extends State<FilterPage> {
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(color: Colors.grey.shade300),
               ),
+              errorStyle: TextStyle(color: Colors.red[700]),
+              helperText: ' ', // Adds space for error message
             ),
+            validator: (value) {
+              if (value != null && value.isNotEmpty) {
+                // Check if input is a valid number
+                if (double.tryParse(value) == null) {
+                  return 'Enter a valid number';
+                }
+                
+                // Check if input is non-negative
+                if (double.parse(value) < 0) {
+                  return 'Must be non-negative';
+                }
+                
+                // Check if max is greater than min (if min has a value)
+                if (minController.text.isNotEmpty) {
+                  final double? minValue = double.tryParse(minController.text);
+                  if (minValue != null && double.parse(value) < minValue) {
+                    return 'Max must be ≥ Min';
+                  }
+                }
+              }
+              return null;
+            },
           ),
         ),
       ],
@@ -771,7 +878,23 @@ class _FilterPageState extends State<FilterPage> {
                 borderSide: BorderSide(color: Colors.grey.shade300),
               ),
               suffixIcon: const Icon(Icons.calendar_today),
+              errorStyle: TextStyle(color: Colors.red[700]),
+              helperText: ' ', // Adds space for error message
             ),
+            validator: (value) {
+              if (value != null && value.isNotEmpty && _endDateController.text.isNotEmpty) {
+                // Check if start date is before end date
+                final startDate = DateTime.tryParse(value);
+                final endDate = DateTime.tryParse(_endDateController.text);
+                
+                if (startDate != null && endDate != null) {
+                  if (startDate.isAfter(endDate)) {
+                    return 'Start date must be before end date';
+                  }
+                }
+              }
+              return null;
+            },
           ),
         ),
         const SizedBox(width: 16),
@@ -794,7 +917,23 @@ class _FilterPageState extends State<FilterPage> {
                 borderSide: BorderSide(color: Colors.grey.shade300),
               ),
               suffixIcon: const Icon(Icons.calendar_today),
+              errorStyle: TextStyle(color: Colors.red[700]),
+              helperText: ' ', // Adds space for error message
             ),
+            validator: (value) {
+              if (value != null && value.isNotEmpty && _startDateController.text.isNotEmpty) {
+                // Check if end date is after start date
+                final endDate = DateTime.tryParse(value);
+                final startDate = DateTime.tryParse(_startDateController.text);
+                
+                if (startDate != null && endDate != null) {
+                  if (endDate.isBefore(startDate)) {
+                    return 'End date must be after start date';
+                  }
+                }
+              }
+              return null;
+            },
           ),
         ),
       ],
@@ -809,18 +948,45 @@ class _FilterPageState extends State<FilterPage> {
     void Function(String?) onMinUnitChanged,
     void Function(String?) onMaxUnitChanged,
   ) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Minimum'),
-              const SizedBox(height: 4),
-              Row(
+        // Header row with labels
+        Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: Text(
+                  'Minimum',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: Text(
+                  'Maximum',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // Input fields row
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Minimum value and unit
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Value field
                   Expanded(
-                    flex: 2,
+                    flex: 1,
                     child: TextFormField(
                       controller: minController,
                       keyboardType: TextInputType.number,
@@ -837,30 +1003,60 @@ class _FilterPageState extends State<FilterPage> {
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                        helperText: ' ', // Adds space for error message
                       ),
+                      validator: (value) {
+                        // Skip validation if lifetime is selected or field is empty
+                        if (minUnit == 'lifetime' || (value == null || value.isEmpty)) {
+                          return null;
+                        }
+                        
+                        // Check if input is a valid integer
+                        if (int.tryParse(value) == null) {
+                          return 'Enter a valid number';
+                        }
+                        
+                        // Check if input is positive
+                        if (int.parse(value) <= 0) {
+                          return 'Must be positive';
+                        }
+                        
+                        // Check if min is less than max (if max has a value and not lifetime)
+                        if (maxController.text.isNotEmpty && maxUnit != 'lifetime') {
+                          final int? maxValue = int.tryParse(maxController.text);
+                          if (maxValue != null) {
+                            // Convert both values to the same unit for comparison
+                            int minValueInDays = _convertToDays(int.parse(value), minUnit);
+                            int maxValueInDays = _convertToDays(maxValue, maxUnit);
+                            
+                            if (minValueInDays > maxValueInDays) {
+                              return 'Min > Max';
+                            }
+                          }
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // Unit dropdown
                   Expanded(
-                    flex: 2,
+                    flex: 1,
                     child: _buildUnitDropdown(minUnit, onMinUnitChanged),
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Maximum'),
-              const SizedBox(height: 4),
-              Row(
+            ),
+            const SizedBox(width: 16),
+            // Maximum value and unit
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Value field
                   Expanded(
-                    flex: 2,
+                    flex: 1,
                     child: TextFormField(
                       controller: maxController,
                       keyboardType: TextInputType.number,
@@ -877,21 +1073,132 @@ class _FilterPageState extends State<FilterPage> {
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                        helperText: ' ', // Adds space for error message
                       ),
+                      validator: (value) {
+                        // Skip validation if lifetime is selected or field is empty
+                        if (maxUnit == 'lifetime' || (value == null || value.isEmpty)) {
+                          return null;
+                        }
+                        
+                        // Check if input is a valid integer
+                        if (int.tryParse(value) == null) {
+                          return 'Enter a valid number';
+                        }
+                        
+                        // Check if input is positive
+                        if (int.parse(value) <= 0) {
+                          return 'Must be positive';
+                        }
+                        
+                        // Check if max is greater than min (if min has a value and not lifetime)
+                        if (minController.text.isNotEmpty && minUnit != 'lifetime') {
+                          final int? minValue = int.tryParse(minController.text);
+                          if (minValue != null) {
+                            // Convert both values to the same unit for comparison
+                            int maxValueInDays = _convertToDays(int.parse(value), maxUnit);
+                            int minValueInDays = _convertToDays(minValue, minUnit);
+                            
+                            if (maxValueInDays < minValueInDays) {
+                              return 'Max < Min';
+                            }
+                          }
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // Unit dropdown
                   Expanded(
-                    flex: 2,
+                    flex: 1,
                     child: _buildUnitDropdown(maxUnit, onMaxUnitChanged),
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  // Callback methods for updating state outside of build
+  void _updateSelectedCategories(String category, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedCategories.add(category);
+      } else {
+        _selectedCategories.remove(category);
+      }
+    });
+  }
+
+  void _updateSelectedStores(String store, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedStores.add(store);
+      } else {
+        _selectedStores.remove(store);
+      }
+    });
+  }
+
+  void _updateSelectedBrands(String brand, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedBrands.add(brand);
+      } else {
+        _selectedBrands.remove(brand);
+      }
+    });
+  }
+
+  void _updateMinWarrantyPeriodUnit(String? value) {
+    setState(() {
+      _minWarrantyPeriodUnit = value ?? 'days';
+    });
+  }
+
+  void _updateMaxWarrantyPeriodUnit(String? value) {
+    setState(() {
+      _maxWarrantyPeriodUnit = value ?? 'days';
+    });
+  }
+
+  void _updateMinWarrantyExtensionUnit(String? value) {
+    setState(() {
+      _minWarrantyExtensionUnit = value ?? 'days';
+    });
+  }
+
+  void _updateMaxWarrantyExtensionUnit(String? value) {
+    setState(() {
+      _maxWarrantyExtensionUnit = value ?? 'days';
+    });
+  }
+
+  void _updateSortDirection(bool isAscending) {
+    setState(() {
+      _sortAscending = isAscending;
+    });
+  }
+
+  // Helper method to convert warranty periods to days for comparison
+  int _convertToDays(int value, String unit) {
+    switch (unit) {
+      case 'days':
+        return value;
+      case 'months':
+        return value * 30; // Approximate months to days
+      case 'years':
+        return value * 365; // Approximate years to days
+      case 'lifetime':
+        return 36500; // 100 years as lifetime
+      default:
+        return value;
+    }
   }
 
   Widget _buildUnitDropdown(String value, void Function(String?) onChanged) {
@@ -922,11 +1229,7 @@ class _FilterPageState extends State<FilterPage> {
   Widget _buildSortDirectionButton(bool isAscending, IconData icon, String label, {required bool isLeft}) {
     final isSelected = _sortAscending == isAscending;
     return InkWell(
-      onTap: () {
-        setState(() {
-          _sortAscending = isAscending;
-        });
-      },
+      onTap: () => _updateSortDirection(isAscending),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
