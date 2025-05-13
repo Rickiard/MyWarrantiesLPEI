@@ -183,21 +183,54 @@ Widget build(BuildContext context) {
 
                         if (email.isEmpty || password.isEmpty || repeatPassword.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Please fill in all fields.")),
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text("Please fill in all required fields to create your account")),
+                                ],
+                              ),
+                              backgroundColor: Colors.blue[700],
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
                           );
                           return;
                         }
 
                         if (!EmailValidator.validate(email)) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Invalid email format.")),
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text("Please enter a valid email address (e.g., name@example.com)")),
+                                ],
+                              ),
+                              backgroundColor: Colors.blue[700],
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
                           );
                           return;
                         }
 
                         if (password != repeatPassword) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Passwords do not match.")),
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text("Passwords don't match. Please make sure both passwords are identical")),
+                                ],
+                              ),
+                              backgroundColor: Colors.blue[700],
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
                           );
                           return;
                         }
@@ -220,7 +253,18 @@ Widget build(BuildContext context) {
                             });
 
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Account created successfully!")),
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.check_circle, color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Expanded(child: Text("Account created successfully! Welcome to MyWarranties")),
+                                  ],
+                                ),
+                                backgroundColor: Colors.green[600],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
                             );
 
                             // Redirecionar para a tela principal ou de login
@@ -231,8 +275,39 @@ Widget build(BuildContext context) {
                           }
                         } catch (e) {
                           // Exibir mensagem de erro
+                          // Extract a more user-friendly error message
+                          String errorMessage = "Unable to create account. Please try again later.";
+                          if (e is FirebaseAuthException) {
+                            switch (e.code) {
+                              case 'email-already-in-use':
+                                errorMessage = "This email is already in use. Please try a different email or sign in.";
+                                break;
+                              case 'weak-password':
+                                errorMessage = "Password is too weak. Please use a stronger password.";
+                                break;
+                              case 'invalid-email':
+                                errorMessage = "Please enter a valid email address.";
+                                break;
+                              case 'operation-not-allowed':
+                                errorMessage = "Account creation is currently disabled. Please try again later.";
+                                break;
+                            }
+                          }
+                          
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Failed to create account: ${e.toString()}")),
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.error_outline, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text(errorMessage)),
+                                ],
+                              ),
+                              backgroundColor: Colors.red[700],
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              duration: Duration(seconds: 4),
+                            ),
                           );
                         }
                       },

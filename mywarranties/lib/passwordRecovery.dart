@@ -132,18 +132,51 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                           // Exibe mensagem de sucesso
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Password reset email sent! Check your inbox.'),
-                              backgroundColor: Colors.green,
+                              content: Row(
+                                children: [
+                                  Icon(Icons.check_circle, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text('Password reset email sent! Please check your inbox and follow the instructions.')),
+                                ],
+                              ),
+                              backgroundColor: Colors.green[600],
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                           );
 
                           Navigator.pop(context);
                         } catch (e) {
                           // Exibe mensagem de erro
+                          // Extract a more user-friendly error message
+                          String errorMessage = "Unable to send password reset email. Please try again later.";
+                          if (e is FirebaseAuthException) {
+                            switch (e.code) {
+                              case 'user-not-found':
+                                errorMessage = "No account found with this email. Please check the email address or create a new account.";
+                                break;
+                              case 'invalid-email':
+                                errorMessage = "Please enter a valid email address.";
+                                break;
+                              case 'too-many-requests':
+                                errorMessage = "Too many attempts. Please try again later.";
+                                break;
+                            }
+                          }
+
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Failed to send password reset email. Please try again.'),
-                              backgroundColor: Colors.red,
+                              content: Row(
+                                children: [
+                                  Icon(Icons.error_outline, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text(errorMessage)),
+                                ],
+                              ),
+                              backgroundColor: Colors.red[700],
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              duration: Duration(seconds: 4),
                             ),
                           );
                         }

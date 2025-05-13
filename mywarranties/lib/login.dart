@@ -185,7 +185,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         if (email.isEmpty || password.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Please fill in both email and password.")),
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text("Please enter your email and password to continue")),
+                                ],
+                              ),
+                              backgroundColor: Colors.blue[700],
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
                           );
                           return;
                         }
@@ -225,7 +236,18 @@ class _LoginScreenState extends State<LoginScreen> {
                             }, SetOptions(merge: true));
 
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Login successful! Welcome, ${user.email}")),
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.check_circle, color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Expanded(child: Text("Welcome back, ${user.email}!")),
+                                  ],
+                                ),
+                                backgroundColor: Colors.green[600],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
                             );
 
                             SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -241,8 +263,41 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                         } catch (e) {
                           // Exibir mensagem de erro
+                          String errorMessage = "Unable to sign in. Please check your credentials and try again.";
+                          if (e is FirebaseAuthException) {
+                            switch (e.code) {
+                              case 'user-not-found':
+                                errorMessage = "No account found with this email. Please check or create a new account.";
+                                break;
+                              case 'wrong-password':
+                                errorMessage = "Incorrect password. Please try again or reset your password.";
+                                break;
+                              case 'invalid-email':
+                                errorMessage = "Please enter a valid email address.";
+                                break;
+                              case 'user-disabled':
+                                errorMessage = "This account has been disabled. Please contact support.";
+                                break;
+                              case 'too-many-requests':
+                                errorMessage = "Too many sign-in attempts. Please try again later.";
+                                break;
+                            }
+                          }
+
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Login failed: ${e.toString()}")),
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.error_outline, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text(errorMessage)),
+                                ],
+                              ),
+                              backgroundColor: Colors.red[700],
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              duration: Duration(seconds: 4),
+                            ),
                           );
                         }
                       },

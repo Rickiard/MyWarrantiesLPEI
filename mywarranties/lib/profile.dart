@@ -319,7 +319,19 @@ class _ProfilePageState extends State<ProfilePage> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error during logout: $e')),
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('Unable to sign out. Please try again later.')),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: Duration(seconds: 4),
+          ),
         );
       }
     }
@@ -485,7 +497,18 @@ class _ProfilePageState extends State<ProfilePage> {
                 // Check if account is already linked or is the current account
                 if (email == _auth.currentUser?.email) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('This account is already active')),
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.white),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('You are already signed in with this account')),
+                        ],
+                      ),
+                      backgroundColor: Colors.blue[700],
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   );
                   Navigator.of(context).pop();
                   return;
@@ -494,7 +517,18 @@ class _ProfilePageState extends State<ProfilePage> {
                 for (var account in _accounts) {
                   if (account['email'] == email) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('This account is already linked')),
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.white),
+                            SizedBox(width: 10),
+                            Expanded(child: Text('This account is already linked to your profile')),
+                          ],
+                        ),
+                        backgroundColor: Colors.blue[700],
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
                     );
                     Navigator.of(context).pop();
                     return;
@@ -571,7 +605,18 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Account added successfully!')),
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.white),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('Account linked successfully!')),
+                        ],
+                      ),
+                      backgroundColor: Colors.green[600],
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   );
                   
                   // Refresh the profile page to ensure the UI is updated
@@ -583,8 +628,36 @@ class _ProfilePageState extends State<ProfilePage> {
                   }
                   
                   // Show error message
+                  // Extract a more user-friendly error message
+                  String errorMessage = "Unable to link account. Please check your credentials and try again.";
+                  if (e is FirebaseAuthException) {
+                    switch (e.code) {
+                      case 'user-not-found':
+                        errorMessage = "No account found with this email. Please check or create a new account.";
+                        break;
+                      case 'wrong-password':
+                        errorMessage = "Incorrect password. Please try again.";
+                        break;
+                      case 'invalid-email':
+                        errorMessage = "Please enter a valid email address.";
+                        break;
+                    }
+                  }
+                  
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Invalid credentials: $e')),
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.white),
+                          SizedBox(width: 10),
+                          Expanded(child: Text(errorMessage)),
+                        ],
+                      ),
+                      backgroundColor: Colors.red[700],
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      duration: Duration(seconds: 4),
+                    ),
                   );
                   
                   // If an error occurred during validation, make sure we're logged back in
@@ -629,11 +702,34 @@ class _ProfilePageState extends State<ProfilePage> {
 
         setState(() {}); // Refresh the UI
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Profile picture updated successfully!')),
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('Profile picture updated successfully!')),
+              ],
+            ),
+            backgroundColor: Colors.green[600],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
         );
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update profile picture: $e')),
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('Unable to update profile picture. Please try again.')),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     }
@@ -898,7 +994,18 @@ class _ProfilePageState extends State<ProfilePage> {
                                       
                                       // Show success message
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Switched to ${account['email']}')),
+                                        SnackBar(
+                                          content: Row(
+                                            children: [
+                                              Icon(Icons.check_circle, color: Colors.white),
+                                              SizedBox(width: 10),
+                                              Expanded(child: Text('Successfully switched to ${account['email']}')),
+                                            ],
+                                          ),
+                                          backgroundColor: Colors.green[600],
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
                                       );
                                       
                                       // Use a slightly longer delay before navigation to ensure Firebase Auth has completed its operations
@@ -922,7 +1029,19 @@ class _ProfilePageState extends State<ProfilePage> {
                                       }
                                       
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Failed to switch account: $e')),
+                                        SnackBar(
+                                          content: Row(
+                                            children: [
+                                              Icon(Icons.error_outline, color: Colors.white),
+                                              SizedBox(width: 10),
+                                              Expanded(child: Text('Unable to switch accounts. Please try again later.')),
+                                            ],
+                                          ),
+                                          backgroundColor: Colors.red[700],
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          duration: Duration(seconds: 3),
+                                        ),
                                       );
                                     }
                                   },
@@ -969,7 +1088,18 @@ class _ProfilePageState extends State<ProfilePage> {
                                       await _saveLinkedAccounts();
                                       
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('${accountToRemove['email']} removed from linked accounts')),
+                                        SnackBar(
+                                          content: Row(
+                                            children: [
+                                              Icon(Icons.check_circle, color: Colors.white),
+                                              SizedBox(width: 10),
+                                              Expanded(child: Text('${accountToRemove['email']} has been unlinked from your profile')),
+                                            ],
+                                          ),
+                                          backgroundColor: Colors.green[600],
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
                                       );
                                     }
                                   },
