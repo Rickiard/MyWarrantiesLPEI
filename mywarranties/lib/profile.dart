@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:async';
 import 'package:mywarranties/main.dart' as app;
 import 'package:mywarranties/list.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -30,12 +31,70 @@ class _ProfilePageState extends State<ProfilePage> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
   
+  // Subscription for logout notifications
+  StreamSubscription<DocumentSnapshot>? _logoutSubscription;
+  String _currentDeviceId = '';
+  
   @override
   void initState() {
     super.initState();
     _loadUserData();
     // Clean up any duplicate accounts that might be in SharedPreferences
     _cleanupDuplicateAccounts();
+    // Setup listener for forced logout
+    _setupForceLogoutListener();
+  }
+  
+  // Setup listener for forced logout notifications
+  Future<void> _setupForceLogoutListener() async {
+    if (_auth.currentUser == null) return;
+    
+    try {
+      // Get the current user's device ID
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_auth.currentUser!.uid)
+          .get();
+          
+      if (userDoc.exists && userDoc.data() != null) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        if (userData['deviceId'] != null) {
+          _currentDeviceId = userData['deviceId'];
+          
+          // Listen for forced logout notifications
+          _logoutSubscription = FirebaseFirestore.instance
+              .collection('forceLogout')
+              .doc(_auth.currentUser!.uid)
+              .snapshots()
+              .listen((snapshot) {
+                if (snapshot.exists && snapshot.data() != null) {
+                  final data = snapshot.data() as Map<String, dynamic>;
+                  
+                  // Check if this notification is for this device and if forceLogout is true
+                  if (data['deviceId'] == _currentDeviceId && data['forceLogout'] == true) {
+                    print('Received force logout notification for this device');
+                    
+                    // Show notification to user
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(data['message'] ?? 'You have been logged out because your account was accessed on another device.'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 5),
+                        ),
+                      );
+                    }
+                    
+                    // Perform logout
+                    _performLogout();
+                  }
+                }
+              });
+        }
+      }
+    } catch (e) {
+      print('Error setting up force logout listener: $e');
+    }
   }
   
   // Clean up any duplicate accounts in SharedPreferences
@@ -737,6 +796,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   void dispose() {
+    // Cancel the logout subscription
+    _logoutSubscription?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();

@@ -209,30 +209,46 @@ class _LoginScreenState extends State<LoginScreen> {
                           final User? user = userCredential.user;
 
                           if (user != null) {
-                            // Verificar se a conta já está logada em outro dispositivo
-                            final idTokenResult = await user.getIdTokenResult(true);
-                            final claims = idTokenResult.claims;
-
-                            if (claims != null && claims['isLoggedIn'] == true) {
-                              // Enviar mensagem para o outro dispositivo
-                              await FirebaseFirestore.instance
-                                  .collection('notifications')
-                                  .doc(user.uid)
-                                  .set({
-                                'message': 'You have been logged out because your account was accessed on another device.',
-                                'timestamp': FieldValue.serverTimestamp(),
-                              });
-
-                              // Atualizar o estado de login no Firebase
-                              await FirebaseAuth.instance.signOut();
+                            // Check if this account is already logged in on another device
+                            DocumentSnapshot userDoc = await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(user.uid)
+                                .get();
+                            
+                            if (userDoc.exists && userDoc.data() != null) {
+                              Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+                              
+                              if (userData['isLoggedIn'] == true && userData['deviceId'] != null) {
+                                String previousDeviceId = userData['deviceId'];
+                                
+                                if (previousDeviceId.isNotEmpty) {
+                                  // Create a logout notification for the previous device
+                                  await FirebaseFirestore.instance
+                                      .collection('forceLogout')
+                                      .doc(user.uid)
+                                      .set({
+                                    'deviceId': previousDeviceId,
+                                    'message': 'You have been logged out because your account was accessed on another device.',
+                                    'timestamp': FieldValue.serverTimestamp(),
+                                    'forceLogout': true
+                                  });
+                                  
+                                  print('Sent logout notification to previous device: $previousDeviceId');
+                                }
+                              }
                             }
-
-                            // Atualizar o estado de login para o dispositivo atual
+                            
+                            // Generate a unique device ID for this device
+                            String deviceId = DateTime.now().millisecondsSinceEpoch.toString() + '_' + user.uid;
+                            
+                            // Update login status for current device
                             await FirebaseFirestore.instance
                                 .collection('users')
                                 .doc(user.uid)
                                 .set({
                               'isLoggedIn': true,
+                              'deviceId': deviceId,
+                              'lastLoginTime': FieldValue.serverTimestamp()
                             }, SetOptions(merge: true));
 
                             ScaffoldMessenger.of(context).showSnackBar(
