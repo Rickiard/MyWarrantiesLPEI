@@ -138,25 +138,36 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   }
 
   // Helper method to parse warranty period to months
-  int _parseWarrantyToMonths(String warrantyPeriod) {
+  double _parseWarrantyToMonths(String warrantyPeriod) {
     if (warrantyPeriod.isEmpty) return 0;
-    if (warrantyPeriod.toLowerCase() == 'lifetime') return -1; // Special case for lifetime
-
-    final parts = warrantyPeriod.toLowerCase().split(' ');
-    if (parts.length != 2) return 0;
-
-    final value = int.tryParse(parts[0]) ?? 0;
-    final unit = parts[1];
-
-    switch (unit) {
-      case 'days':
-        return (value / 30).ceil(); // Convert days to months
-      case 'months':
-        return value;
-      case 'years':
-        return value * 12;
-      default:
-        return 0;
+    
+    // Handle lifetime warranty - more robust check
+    if (warrantyPeriod.toLowerCase().contains('lifetime')) {
+      return -1; // Use -1 to represent lifetime
+    }
+    
+    final parts = warrantyPeriod.toLowerCase().trim().split(' ');
+    if (parts.length < 2) return 0;
+    
+    try {
+      final value = double.parse(parts[0]);
+      final unit = parts[1];
+      
+      switch (unit) {
+        case 'day':
+        case 'days':
+          return value / 30; // Approximate days to months
+        case 'month':
+        case 'months':
+          return value;
+        case 'year':
+        case 'years':
+          return value * 12;
+        default:
+          return 0;
+      }
+    } catch (e) {
+      return 0;
     }
   }
 
@@ -232,51 +243,101 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
             }
           }
           
-          // Warranty period range filter with improved handling
+          // Warranty period range filter with improved handling for lifetime warranties
           if (_activeFilters['minWarrantyPeriod']?.isNotEmpty ?? false) {
-            final warrantyMonths = _parseWarrantyToMonths(product['warrantyPeriod'] ?? '0');
-            final minWarrantyMonths = _parseWarrantyToMonths(_activeFilters['minWarrantyPeriod']!);
+            final warrantyPeriod = product['warrantyPeriod'] ?? '0';
+            final minWarrantyPeriod = _activeFilters['minWarrantyPeriod']!;
             
-            // Handle lifetime warranty
-            if (warrantyMonths == -1) return true; // Lifetime warranty passes all filters
-            if (minWarrantyMonths == -1) return false; // Can't meet lifetime minimum
+            // Special handling for lifetime warranty in product
+            if (warrantyPeriod.toLowerCase().contains('lifetime')) {
+              // Lifetime warranty passes all minimum filters
+              return true;
+            }
+            
+            // Special handling for lifetime in filter criteria
+            if (minWarrantyPeriod.toLowerCase().contains('lifetime')) {
+              // If filter requires lifetime but product doesn't have it, fail
+              return false;
+            }
+            
+            // Normal numeric comparison
+            final warrantyMonths = _parseWarrantyToMonths(warrantyPeriod);
+            final minWarrantyMonths = _parseWarrantyToMonths(minWarrantyPeriod);
+            
             if (warrantyMonths < minWarrantyMonths) {
               return false;
             }
           }
+          
           if (_activeFilters['maxWarrantyPeriod']?.isNotEmpty ?? false) {
-            final warrantyMonths = _parseWarrantyToMonths(product['warrantyPeriod'] ?? '0');
-            final maxWarrantyMonths = _parseWarrantyToMonths(_activeFilters['maxWarrantyPeriod']!);
+            final warrantyPeriod = product['warrantyPeriod'] ?? '0';
+            final maxWarrantyPeriod = _activeFilters['maxWarrantyPeriod']!;
             
-            // Handle lifetime warranty
-            if (warrantyMonths == -1) {
-              return maxWarrantyMonths == -1; // Only pass if max is also lifetime
+            // Special handling for lifetime warranty in product
+            if (warrantyPeriod.toLowerCase().contains('lifetime')) {
+              // If max filter is also lifetime, pass; otherwise fail
+              return maxWarrantyPeriod.toLowerCase().contains('lifetime');
             }
-            if (maxWarrantyMonths == -1) return true; // All warranties are less than lifetime
+            
+            // If max filter is lifetime, all non-lifetime warranties pass
+            if (maxWarrantyPeriod.toLowerCase().contains('lifetime')) {
+              return true;
+            }
+            
+            // Normal numeric comparison
+            final warrantyMonths = _parseWarrantyToMonths(warrantyPeriod);
+            final maxWarrantyMonths = _parseWarrantyToMonths(maxWarrantyPeriod);
+            
             if (warrantyMonths > maxWarrantyMonths) {
               return false;
             }
           }
           
-          // Warranty extension range filter with improved handling
+          // Warranty extension range filter with improved handling for lifetime warranties
           if (_activeFilters['minWarrantyExtension']?.isNotEmpty ?? false) {
-            final extensionMonths = _parseWarrantyToMonths(product['warrantyExtension'] ?? '0');
-            final minExtensionMonths = _parseWarrantyToMonths(_activeFilters['minWarrantyExtension']!);
+            final warrantyExtension = product['warrantyExtension'] ?? '0';
+            final minWarrantyExtension = _activeFilters['minWarrantyExtension']!;
             
-            if (extensionMonths == -1) return true; // Lifetime extension passes all filters
-            if (minExtensionMonths == -1) return false; // Can't meet lifetime minimum
+            // Special handling for lifetime warranty extension in product
+            if (warrantyExtension.toLowerCase().contains('lifetime')) {
+              // Lifetime extension passes all minimum filters
+              return true;
+            }
+            
+            // Special handling for lifetime in filter criteria
+            if (minWarrantyExtension.toLowerCase().contains('lifetime')) {
+              // If filter requires lifetime but product doesn't have it, fail
+              return false;
+            }
+            
+            // Normal numeric comparison
+            final extensionMonths = _parseWarrantyToMonths(warrantyExtension);
+            final minExtensionMonths = _parseWarrantyToMonths(minWarrantyExtension);
+            
             if (extensionMonths < minExtensionMonths) {
               return false;
             }
           }
+          
           if (_activeFilters['maxWarrantyExtension']?.isNotEmpty ?? false) {
-            final extensionMonths = _parseWarrantyToMonths(product['warrantyExtension'] ?? '0');
-            final maxExtensionMonths = _parseWarrantyToMonths(_activeFilters['maxWarrantyExtension']!);
+            final warrantyExtension = product['warrantyExtension'] ?? '0';
+            final maxWarrantyExtension = _activeFilters['maxWarrantyExtension']!;
             
-            if (extensionMonths == -1) {
-              return maxExtensionMonths == -1; // Only pass if max is also lifetime
+            // Special handling for lifetime warranty extension in product
+            if (warrantyExtension.toLowerCase().contains('lifetime')) {
+              // If max filter is also lifetime, pass; otherwise fail
+              return maxWarrantyExtension.toLowerCase().contains('lifetime');
             }
-            if (maxExtensionMonths == -1) return true; // All extensions are less than lifetime
+            
+            // If max filter is lifetime, all non-lifetime warranties pass
+            if (maxWarrantyExtension.toLowerCase().contains('lifetime')) {
+              return true;
+            }
+            
+            // Normal numeric comparison
+            final extensionMonths = _parseWarrantyToMonths(warrantyExtension);
+            final maxExtensionMonths = _parseWarrantyToMonths(maxWarrantyExtension);
+            
             if (extensionMonths > maxExtensionMonths) {
               return false;
             }
@@ -362,10 +423,10 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
             case 'warrantyExtension':
               final monthsA = _parseWarrantyToMonths(valueA.toString());
               final monthsB = _parseWarrantyToMonths(valueB.toString());
-              // Handle lifetime warranty in sorting
-              if (monthsA == -1 && monthsB == -1) return 0;
-              if (monthsA == -1) return isAscending ? 1 : -1;
-              if (monthsB == -1) return isAscending ? -1 : 1;
+              // Handle lifetime warranty in sorting - improved logic
+              if (monthsA == -1 && monthsB == -1) return 0; // Both are lifetime
+              if (monthsA == -1) return isAscending ? 1 : -1; // A is lifetime, should be highest
+              if (monthsB == -1) return isAscending ? -1 : 1; // B is lifetime, should be highest
               return isAscending ? monthsA.compareTo(monthsB) : monthsB.compareTo(monthsA);
               
             default:
@@ -486,32 +547,47 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
 
   int _parseWarrantyPeriod(String warranty) {
     if (warranty.isEmpty) return 0;
-    if (warranty.toLowerCase() == 'lifetime') return 36500; // 100 years as lifetime
-    
+  
+    // More robust check for lifetime warranty
+    if (warranty.toLowerCase().contains('lifetime')) return 36500; // 100 years as lifetime
+  
     // Split value and unit
-    final parts = warranty.toLowerCase().split(' ');
+    final parts = warranty.toLowerCase().trim().split(' ');
     if (parts.length < 2) return 0;
-    
-    final value = int.tryParse(parts[0]) ?? 0;
-    final unit = parts[1];
-    
-    if (unit.startsWith('day')) {
-      return value;
-    } else if (unit.startsWith('month')) {
-      return value * 30;
-    } else if (unit.startsWith('year')) {
-      return value * 365;
+  
+    try {
+      final value = int.tryParse(parts[0]) ?? 0;
+      final unit = parts[1];
+      
+      if (unit.startsWith('day')) {
+        return value;
+      } else if (unit.startsWith('month')) {
+        return value * 30;
+      } else if (unit.startsWith('year')) {
+        return value * 365;
+      }
+      return 0;
+    } catch (e) {
+      return 0; // Return 0 if any parsing errors occur
     }
-    return 0;
   }
   
   bool _isWarrantyExpiringSoon(Map<String, dynamic> product) {
     try {
       final String? warrantyPeriod = product['warrantyPeriod'];
-      if (warrantyPeriod?.toLowerCase() == 'lifetime') return false;
+      
+      // More robust check for lifetime warranty
+      if (warrantyPeriod != null && warrantyPeriod.toLowerCase().contains('lifetime')) {
+        return false; // Lifetime warranties never expire
+      }
       
       final String? purchaseDate = product['purchaseDate'];
       final String? warrantyExtension = product['warrantyExtension'];
+      
+      // Check if warranty extension is lifetime
+      if (warrantyExtension != null && warrantyExtension.toLowerCase().contains('lifetime')) {
+        return false; // Lifetime extension means it never expires
+      }
       
       if (purchaseDate == null || warrantyPeriod == null) return false;
       
@@ -532,10 +608,19 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   Color _getExpiryTextColor(Map<String, dynamic> product) {
     try {
       final String? warrantyPeriod = product['warrantyPeriod'];
-      if (warrantyPeriod?.toLowerCase() == 'lifetime') return Colors.green;
+      final String? warrantyExtension = product['warrantyExtension'];
+      
+      // More robust check for lifetime warranty
+      if (warrantyPeriod != null && warrantyPeriod.toLowerCase().contains('lifetime')) {
+        return Colors.green; // Lifetime warranties shown in green
+      }
+      
+      // Check if warranty extension is lifetime
+      if (warrantyExtension != null && warrantyExtension.toLowerCase().contains('lifetime')) {
+        return Colors.green; // Lifetime extension shown in green
+      }
       
       final String? purchaseDate = product['purchaseDate'];
-      final String? warrantyExtension = product['warrantyExtension'];
       
       if (purchaseDate == null || warrantyPeriod == null) return Colors.black;
       
@@ -598,10 +683,19 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   String _getExpiryBadgeText(Map<String, dynamic> product) {
     try {
       final String? warrantyPeriod = product['warrantyPeriod'];
-      if (warrantyPeriod?.toLowerCase() == 'lifetime') return '';
+      final String? warrantyExtension = product['warrantyExtension'];
+      
+      // More robust check for lifetime warranty
+      if (warrantyPeriod != null && warrantyPeriod.toLowerCase().contains('lifetime')) {
+        return 'LIFETIME'; // Show lifetime badge
+      }
+      
+      // Check if warranty extension is lifetime
+      if (warrantyExtension != null && warrantyExtension.toLowerCase().contains('lifetime')) {
+        return 'LIFETIME'; // Show lifetime badge for lifetime extension
+      }
       
       final String? purchaseDate = product['purchaseDate'];
-      final String? warrantyExtension = product['warrantyExtension'];
       
       if (purchaseDate == null || warrantyPeriod == null) return '';
       
