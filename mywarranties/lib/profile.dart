@@ -8,6 +8,12 @@ import 'package:mywarranties/main.dart' as app;
 import 'package:mywarranties/list.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'notification_settings.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+// Initialize GoogleSignIn
+final GoogleSignIn _googleSignIn = GoogleSignIn(
+  clientId: '598622253789-1oljk3c82dcqorbofvvb2otn12bkkp9s.apps.googleusercontent.com',
+);
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -462,6 +468,206 @@ class _ProfilePageState extends State<ProfilePage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Google Sign-In Button
+                InkWell(
+                  onTap: () async {
+                    try {
+                      // Show loading indicator
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+
+                      // Start Google Sign-In process
+                      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+                      if (googleUser != null) {
+                        try {
+                          // Get Google account details
+                          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+                          // Create Firebase credential with Google token
+                          final AuthCredential credential = GoogleAuthProvider.credential(
+                            accessToken: googleAuth.accessToken,
+                            idToken: googleAuth.idToken,
+                          );
+
+                          // Save current user credentials
+                          final prefs = await SharedPreferences.getInstance();
+                          final currentEmail = _auth.currentUser?.email ?? '';
+                          final currentPassword = prefs.getString('userPassword') ?? '';
+                          final currentUid = _auth.currentUser?.uid;
+
+                          // Sign out from current account
+                          await FirebaseAuth.instance.signOut();
+
+                          // Sign in with Google
+                          final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+                          final User? user = userCredential.user;
+
+                          if (user != null) {
+                            // Immediately sign out the Google account
+                            await FirebaseAuth.instance.signOut();
+
+                            // Re-authenticate the current user
+                            if (currentEmail.isNotEmpty && currentPassword.isNotEmpty) {
+                              await FirebaseAuth.instance.signInWithEmailAndPassword(
+                                email: currentEmail,
+                                password: currentPassword,
+                              );
+                            }
+
+                            // Close loading dialog
+                            if (Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            }
+
+                            // Add the Google account to linked accounts
+                            setState(() {
+                              final updatedAccounts = List<Map<String, dynamic>>.from(_accounts);
+                              updatedAccounts.add({
+                                'email': user.email,
+                                'uid': user.uid,
+                                'password': 'google_sign_in', // Special marker for Google accounts
+                                'isGoogleAccount': true,
+                              });
+                              _accounts = updatedAccounts;
+                            });
+
+                            // Save updated linked accounts
+                            await _saveLinkedAccounts();
+
+                            // Close the add account dialog
+                            Navigator.of(context).pop();
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.check_circle, color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Expanded(child: Text('Google account linked successfully!')),
+                                  ],
+                                ),
+                                backgroundColor: Colors.green[600],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          print('Error during Google sign in: $e');
+                          // Close loading dialog if it's open
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          }
+
+                          // Show error message
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Row(
+                                children: [
+                                  Icon(Icons.error_outline, color: Colors.white),
+                                  SizedBox(width: 10),
+                                  Expanded(child: Text('Error signing in with Google. Please try again.')),
+                                ],
+                              ),
+                              backgroundColor: Colors.red[700],
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              duration: Duration(seconds: 4),
+                            ),
+                          );
+
+                          // Re-authenticate the current user
+                          try {
+                            final prefs = await SharedPreferences.getInstance();
+                            final currentEmail = prefs.getString('userEmail') ?? '';
+                            final currentPassword = prefs.getString('userPassword') ?? '';
+
+                            if (currentEmail.isNotEmpty && currentPassword.isNotEmpty) {
+                              await FirebaseAuth.instance.signInWithEmailAndPassword(
+                                email: currentEmail,
+                                password: currentPassword,
+                              );
+                            }
+                          } catch (loginError) {
+                            print('Error re-authenticating after Google sign-in error: $loginError');
+                          }
+                        }
+                      } else {
+                        // Close loading dialog if it's open
+                        if (Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        }
+                      }
+                    } catch (e) {
+                      print('Error initiating Google sign in: $e');
+                      // Close loading dialog if it's open
+                      if (Navigator.canPop(context)) {
+                        Navigator.pop(context);
+                      }
+
+                      // Show error message
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              Icon(Icons.error_outline, color: Colors.white),
+                              SizedBox(width: 10),
+                              Expanded(child: Text('Error signing in with Google. Please try again.')),
+                            ],
+                          ),
+                          backgroundColor: Colors.red[700],
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          duration: Duration(seconds: 4),
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    height: 56,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Colors.grey.shade300, width: 1),
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          spreadRadius: 2,
+                          blurRadius: 5,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            'assets/google_logo.png',
+                            height: 50,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Or sign in with email',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(height: 20),
                 TextField(
                   controller: _emailController,
                   decoration: InputDecoration(
@@ -596,7 +802,8 @@ class _ProfilePageState extends State<ProfilePage> {
                     updatedAccounts.add({
                       'email': email,
                       'uid': newUid,
-                      'password': password, // Store password for switching accounts
+                      'password': password,
+                      'isGoogleAccount': false,
                     });
                     
                     // Update the accounts list
@@ -924,6 +1131,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                             'email': currentEmail,
                                             'uid': currentUid,
                                             'password': currentPassword,
+                                            'isGoogleAccount': false,
                                           });
                                           print('Added current account to linked accounts: $currentEmail');
                                         } else {
@@ -936,17 +1144,34 @@ class _ProfilePageState extends State<ProfilePage> {
                                         print('Account in prepared list: ${acc['email']}');
                                       }
                                       
-                                      // We'll update the UI and save to SharedPreferences after the authentication is complete
-                                      
                                       // Completely sign out the current user
                                       await FirebaseAuth.instance.signOut();
                                       
-                                      // Sign in with the new account using the login logic from login.dart
-                                      final UserCredential userCredential = await FirebaseAuth.instance
-                                          .signInWithEmailAndPassword(
-                                        email: account['email'],
-                                        password: account['password'],
-                                      );
+                                      // Sign in with the new account
+                                      UserCredential userCredential;
+                                      GoogleSignInAuthentication? googleAuth;
+                                      
+                                      if (switchToAccount['isGoogleAccount'] == true) {
+                                        // Handle Google Sign-In
+                                        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+                                        if (googleUser == null) {
+                                          throw Exception('Google Sign-In was cancelled');
+                                        }
+                                        
+                                        googleAuth = await googleUser.authentication;
+                                        final AuthCredential credential = GoogleAuthProvider.credential(
+                                          accessToken: googleAuth.accessToken,
+                                          idToken: googleAuth.idToken,
+                                        );
+                                        
+                                        userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+                                      } else {
+                                        // Handle email/password sign-in
+                                        userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+                                          email: switchToAccount['email'],
+                                          password: switchToAccount['password'],
+                                        );
+                                      }
                                       
                                       final User? user = userCredential.user;
                                       
@@ -975,23 +1200,24 @@ class _ProfilePageState extends State<ProfilePage> {
                                         }, SetOptions(merge: true));
                                         
                                         // Update SharedPreferences with new user credentials
-                                        await prefs.setString('userEmail', account['email']);
-                                        await prefs.setString('userPassword', account['password']);
+                                        await prefs.setString('userEmail', user.email ?? '');
+                                        if (switchToAccount['isGoogleAccount'] == true && googleAuth != null) {
+                                          await prefs.setString('accessToken', googleAuth.accessToken ?? '');
+                                          await prefs.setString('idToken', googleAuth.idToken ?? '');
+                                          await prefs.remove('userPassword');
+                                        } else {
+                                          await prefs.setString('userPassword', switchToAccount['password']);
+                                          await prefs.remove('accessToken');
+                                          await prefs.remove('idToken');
+                                        }
                                         await prefs.setBool('isLoggedIn', true);
                                         
-                                        // Clear any other authentication tokens
-                                        await prefs.remove('accessToken');
-                                        await prefs.remove('idToken');
-                                        
                                         // Now that authentication is complete, update the UI state
-                                        // This prevents the UI from showing duplicate accounts during the transition
                                         setState(() {
                                           _accounts = updatedAccounts;
-                                          _email = user.email ?? account['email'];
+                                          _email = user.email ?? switchToAccount['email'];
                                           _username = _email.split('@')[0];
                                         });
-                                        
-                                        // We'll save to SharedPreferences after authentication is complete
                                       }
                                       
                                       // Close loading dialog
@@ -1006,7 +1232,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                             children: [
                                               Icon(Icons.check_circle, color: Colors.white),
                                               SizedBox(width: 10),
-                                              Expanded(child: Text('Successfully switched to ${account['email']}')),
+                                              Expanded(child: Text('Successfully switched to ${switchToAccount['email']}')),
                                             ],
                                           ),
                                           backgroundColor: Colors.green[600],
@@ -1016,7 +1242,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                       );
                                       
                                       // Use a slightly longer delay before navigation to ensure Firebase Auth has completed its operations
-                                      // This helps prevent the loading screen from getting stuck
                                       await Future.delayed(Duration(milliseconds: 500));
                                       
                                       // Navigate directly to the ListPage to show the new user's content
