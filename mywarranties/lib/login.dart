@@ -5,6 +5,7 @@ import 'loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uuid/uuid.dart';
 
 void main() {
   runApp(MyApp());
@@ -32,11 +33,59 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  final _uuid = Uuid();
 
   void _togglePasswordVisibility() {
     setState(() {
       _isPasswordVisible = !_isPasswordVisible;
     });
+  }
+
+  Future<String> _generateDeviceToken() async {
+    return _uuid.v4();
+  }
+
+  Future<bool> _checkExistingSession(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        return data?['isLoggedIn'] == true && data?['deviceToken'] != null;
+      }
+      return false;
+    } catch (e) {
+      print('Error checking existing session: $e');
+      return false;
+    }
+  }
+
+  Future<void> _handleExistingSession(String userId) async {
+    try {
+      // Send notification to the other device
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(userId)
+          .set({
+        'message': 'You have been logged out because your account was accessed on another device.',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Update the user's document to clear the previous session
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .update({
+        'isLoggedIn': false,
+        'deviceToken': null,
+      });
+    } catch (e) {
+      print('Error handling existing session: $e');
+      // Continue with login even if notification fails
+    }
   }
 
   @override
@@ -179,7 +228,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     // Botão "Enter"
                     ElevatedButton(
-                      onPressed: () async{
+                      onPressed: () async {
                         final email = _emailController.text.trim();
                         final password = _passwordController.text.trim();
 
@@ -202,67 +251,108 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
 
                         try {
-                          // Autenticar o utilizador com Firebase
+                          // Show loading indicator
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+
+                          // Generate a unique device token
+                          final deviceToken = await _generateDeviceToken();
+
+                          // Authenticate the user with Firebase
                           UserCredential userCredential = await FirebaseAuth.instance
                               .signInWithEmailAndPassword(email: email, password: password);
 
                           final User? user = userCredential.user;
 
                           if (user != null) {
-                            // Verificar se a conta já está logada em outro dispositivo
-                            final idTokenResult = await user.getIdTokenResult(true);
-                            final claims = idTokenResult.claims;
+                            try {
+                              // Check for existing session
+                              final hasExistingSession = await _checkExistingSession(user.uid);
+                              
+                              if (hasExistingSession) {
+                                // Handle existing session
+                                await _handleExistingSession(user.uid);
+                              }
 
-                            if (claims != null && claims['isLoggedIn'] == true) {
-                              // Enviar mensagem para o outro dispositivo
+                              // Update the user's document with the new session
                               await FirebaseFirestore.instance
-                                  .collection('notifications')
+                                  .collection('users')
                                   .doc(user.uid)
                                   .set({
-                                'message': 'You have been logged out because your account was accessed on another device.',
-                                'timestamp': FieldValue.serverTimestamp(),
-                              });
+                                'isLoggedIn': true,
+                                'deviceToken': deviceToken,
+                                'lastLogin': FieldValue.serverTimestamp(),
+                              }, SetOptions(merge: true));
 
-                              // Atualizar o estado de login no Firebase
-                              await FirebaseAuth.instance.signOut();
-                            }
+                              // Save session information to SharedPreferences
+                              SharedPreferences prefs = await SharedPreferences.getInstance();
+                              await prefs.setBool('isLoggedIn', true);
+                              await prefs.setString('userEmail', user.email ?? '');
+                              await prefs.setString('userPassword', password);
+                              await prefs.setString('deviceToken', deviceToken);
 
-                            // Atualizar o estado de login para o dispositivo atual
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(user.uid)
-                                .set({
-                              'isLoggedIn': true,
-                            }, SetOptions(merge: true));
+                              // Close loading dialog
+                              if (Navigator.canPop(context)) {
+                                Navigator.of(context, rootNavigator: true).pop();
+                              }
 
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Row(
-                                  children: [
-                                    Icon(Icons.check_circle, color: Colors.white),
-                                    SizedBox(width: 10),
-                                    Expanded(child: Text("Welcome back, ${user.email}!")),
-                                  ],
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      Icon(Icons.check_circle, color: Colors.white),
+                                      SizedBox(width: 10),
+                                      Expanded(child: Text("Welcome back, ${user.email}!")),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.green[600],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
-                                backgroundColor: Colors.green[600],
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                            );
+                              );
 
-                            SharedPreferences prefs = await SharedPreferences.getInstance();
-                            await prefs.setBool('isLoggedIn', true);
-                            await prefs.setString('userEmail', user.email ?? '');
-                            await prefs.setString('userPassword', password);
-
-                            // Redirecionar para a tela principal ou outra tela
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (context) => ListPage()),
-                            );
+                              // Navigate to the main screen
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (context) => ListPage()),
+                              );
+                            } catch (e) {
+                              print('Error updating session: $e');
+                              // Close loading dialog if it's open
+                              if (Navigator.canPop(context)) {
+                                Navigator.pop(context);
+                              }
+                              
+                              // Show error message
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      Icon(Icons.error_outline, color: Colors.white),
+                                      SizedBox(width: 10),
+                                      Expanded(child: Text("Error updating session. Please try again.")),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.red[700],
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  duration: Duration(seconds: 4),
+                                ),
+                              );
+                            }
                           }
                         } catch (e) {
-                          // Exibir mensagem de erro
+                          // Close loading dialog if it's open
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          }
+
+                          // Handle error messages
                           String errorMessage = "Unable to sign in. Please check your credentials and try again.";
                           if (e is FirebaseAuthException) {
                             switch (e.code) {

@@ -276,12 +276,29 @@ class _ProfilePageState extends State<ProfilePage> {
       // Update user status in Firestore if user is logged in
       if (_auth.currentUser != null) {
         try {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(_auth.currentUser!.uid)
-              .set({
-            'isLoggedIn': false,
-          }, SetOptions(merge: true));
+          final prefs = await SharedPreferences.getInstance();
+          final deviceToken = prefs.getString('deviceToken');
+          
+          // Only clear the session if the device token matches
+          if (deviceToken != null) {
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(_auth.currentUser!.uid)
+                .get();
+                
+            if (userDoc.exists) {
+              final data = userDoc.data();
+              if (data?['deviceToken'] == deviceToken) {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(_auth.currentUser!.uid)
+                    .update({
+                  'isLoggedIn': false,
+                  'deviceToken': null,
+                });
+              }
+            }
+          }
         } catch (e) {
           print('Error updating user login status: $e');
         }
@@ -297,12 +314,11 @@ class _ProfilePageState extends State<ProfilePage> {
       prefs.remove('userPassword');
       prefs.remove('accessToken');
       prefs.remove('idToken');
-      
-      // Keep linkedAccounts in SharedPreferences for future logins
+      prefs.remove('deviceToken');
       
       // Close loading dialog
       if (Navigator.canPop(context)) {
-        Navigator.pop(context);
+        Navigator.of(context, rootNavigator: true).pop();
       }
       
       // Navigate to the welcome screen
@@ -312,28 +328,19 @@ class _ProfilePageState extends State<ProfilePage> {
         (route) => false,
       );
     } catch (e) {
+      print('Error during logout: $e');
       // Close loading dialog if it's open
       if (Navigator.canPop(context)) {
-        Navigator.pop(context);
+        Navigator.of(context, rootNavigator: true).pop();
       }
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 10),
-                Expanded(child: Text('Unable to sign out. Please try again later.')),
-              ],
-            ),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: Duration(seconds: 4),
-          ),
-        );
-      }
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error during logout. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
   

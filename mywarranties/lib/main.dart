@@ -11,6 +11,7 @@ import 'login.dart';
 import 'register.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'list.dart';
+import 'package:uuid/uuid.dart';
 
 // Inicialize o GoogleSignIn
 final GoogleSignIn _googleSignIn = GoogleSignIn(
@@ -48,7 +49,39 @@ class MyApp extends StatelessWidget {
       // Check if a user is already signed in
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
-        // User is already signed in, no need to re-authenticate
+        // Verify device token
+        final prefs = await SharedPreferences.getInstance();
+        final deviceToken = prefs.getString('deviceToken');
+        
+        if (deviceToken != null) {
+          try {
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(currentUser.uid)
+                .get();
+                
+            if (userDoc.exists) {
+              final data = userDoc.data();
+              if (data?['deviceToken'] != deviceToken) {
+                // Device token mismatch - another device has logged in
+                await FirebaseAuth.instance.signOut();
+                await prefs.setBool('isLoggedIn', false);
+                await prefs.remove('userEmail');
+                await prefs.remove('userPassword');
+                await prefs.remove('accessToken');
+                await prefs.remove('idToken');
+                await prefs.remove('deviceToken');
+                return false;
+              }
+            }
+          } catch (e) {
+            print('Error checking device token: $e');
+            // If there's an error checking the token, assume the session is valid
+            return true;
+          }
+        }
+        
+        // User is already signed in and device token matches
         return true;
       }
       
@@ -64,6 +97,7 @@ class MyApp extends StatelessWidget {
         final userEmail = prefs.getString('userEmail');
         final userAcessToken = prefs.getString('accessToken');
         final userIdToken = prefs.getString('idToken');
+        final deviceToken = prefs.getString('deviceToken');
   
         if (userPassword != null && userEmail != null) {
           try {
@@ -71,10 +105,39 @@ class MyApp extends StatelessWidget {
             await FirebaseAuth.instance.signOut();
             
             // Realiza o login com as credenciais de email/password
-            await FirebaseAuth.instance.signInWithEmailAndPassword(
+            final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
               email: userEmail,
               password: userPassword,
             );
+            
+            // Verify device token after login
+            if (deviceToken != null && userCredential.user != null) {
+              try {
+                final userDoc = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(userCredential.user!.uid)
+                    .get();
+                    
+                if (userDoc.exists) {
+                  final data = userDoc.data();
+                  if (data?['deviceToken'] != deviceToken) {
+                    // Device token mismatch - another device has logged in
+                    await FirebaseAuth.instance.signOut();
+                    await prefs.setBool('isLoggedIn', false);
+                    await prefs.remove('userEmail');
+                    await prefs.remove('userPassword');
+                    await prefs.remove('accessToken');
+                    await prefs.remove('idToken');
+                    await prefs.remove('deviceToken');
+                    return false;
+                  }
+                }
+              } catch (e) {
+                print('Error checking device token after login: $e');
+                // If there's an error checking the token, assume the session is valid
+                return true;
+              }
+            }
   
             // Retorna true se o login for bem-sucedido
             return true;
@@ -85,6 +148,7 @@ class MyApp extends StatelessWidget {
             await prefs.setBool('isLoggedIn', false);
             await prefs.remove('userPassword');
             await prefs.remove('userEmail');
+            await prefs.remove('deviceToken');
             return false;
           }
         } else if (userAcessToken != null && userIdToken != null) {
@@ -98,7 +162,36 @@ class MyApp extends StatelessWidget {
             );
   
             // Realiza o login novamente com as credenciais
-            await FirebaseAuth.instance.signInWithCredential(credential);
+            final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+            
+            // Verify device token after login
+            if (deviceToken != null && userCredential.user != null) {
+              try {
+                final userDoc = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(userCredential.user!.uid)
+                    .get();
+                    
+                if (userDoc.exists) {
+                  final data = userDoc.data();
+                  if (data?['deviceToken'] != deviceToken) {
+                    // Device token mismatch - another device has logged in
+                    await FirebaseAuth.instance.signOut();
+                    await prefs.setBool('isLoggedIn', false);
+                    await prefs.remove('userEmail');
+                    await prefs.remove('userPassword');
+                    await prefs.remove('accessToken');
+                    await prefs.remove('idToken');
+                    await prefs.remove('deviceToken');
+                    return false;
+                  }
+                }
+              } catch (e) {
+                print('Error checking device token after Google login: $e');
+                // If there's an error checking the token, assume the session is valid
+                return true;
+              }
+            }
   
             // Retorna true se o login for bem-sucedido
             return true;
@@ -109,11 +202,9 @@ class MyApp extends StatelessWidget {
             await prefs.setBool('isLoggedIn', false);
             await prefs.remove('accessToken');
             await prefs.remove('idToken');
+            await prefs.remove('deviceToken');
             return false;
           }
-        } else {
-          await prefs.setBool('isLoggedIn', false);
-          return false;
         }
       }
   
@@ -161,64 +252,191 @@ class WelcomeScreen extends StatelessWidget {
   // Função para lidar com o login do Google
   Future<void> _handleGoogleSignIn(BuildContext context) async {
     try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
       // Inicia o processo de login com o Google
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser != null) {
-        // Obtenha os detalhes da conta do Google
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        try {
+          // Obtenha os detalhes da conta do Google
+          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
-        // Crie uma credencial do Firebase com o token do Google
-        final AuthCredential credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
+          // Crie uma credencial do Firebase com o token do Google
+          final AuthCredential credential = GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
 
-        // Faça login no Firebase usando a credencial do Google
-        final UserCredential userCredential =
-            await FirebaseAuth.instance.signInWithCredential(credential);
+          // Faça login no Firebase usando a credencial do Google
+          final UserCredential userCredential =
+              await FirebaseAuth.instance.signInWithCredential(credential);
 
-        final User? user = userCredential.user;
+          final User? user = userCredential.user;
 
-        if (user != null) {
-          // Verifique se o utilizador já existe no Firestore
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get();
+          if (user != null) {
+            try {
+              // Generate device token
+              final deviceToken = Uuid().v4();
 
-          if (!userDoc.exists) {
-            // Guardar os dados do utilizador no Firestore se ele for novo
-            await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-              'id': user.uid,
-              'email': user.email,
-              'name': user.displayName,
-              'created_at': FieldValue.serverTimestamp(), 
-              'update_at': FieldValue.serverTimestamp()
-            });
+              // Check for existing session
+              final userDoc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .get();
+
+              if (userDoc.exists) {
+                final data = userDoc.data();
+                if (data?['isLoggedIn'] == true && data?['deviceToken'] != null) {
+                  // Send notification to the other device
+                  await FirebaseFirestore.instance
+                      .collection('notifications')
+                      .doc(user.uid)
+                      .set({
+                    'message': 'You have been logged out because your account was accessed on another device.',
+                    'timestamp': FieldValue.serverTimestamp(),
+                  });
+
+                  // Update the user's document to clear the previous session
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .update({
+                    'isLoggedIn': false,
+                    'deviceToken': null,
+                  });
+                }
+              }
+
+              // Update user document with new session
+              await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+                'id': user.uid,
+                'email': user.email,
+                'name': user.displayName,
+                'created_at': FieldValue.serverTimestamp(),
+                'update_at': FieldValue.serverTimestamp(),
+                'isLoggedIn': true,
+                'deviceToken': deviceToken,
+                'lastLogin': FieldValue.serverTimestamp(),
+              }, SetOptions(merge: true));
+
+              // Save session information
+              SharedPreferences prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('isLoggedIn', true);
+              await prefs.setString('accessToken', googleAuth.accessToken ?? '');
+              await prefs.setString('idToken', googleAuth.idToken ?? '');
+              await prefs.setString('deviceToken', deviceToken);
+
+              // Close loading dialog
+              if (Navigator.canPop(context)) {
+                Navigator.of(context, rootNavigator: true).pop();
+              }
+
+              // Exibe uma mensagem de sucesso
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.white),
+                      SizedBox(width: 10),
+                      Expanded(child: Text("Welcome back, ${user.displayName}!")),
+                    ],
+                  ),
+                  backgroundColor: Colors.green[600],
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+
+              // Redirecione para a tela principal
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => ListPage()),
+              );
+            } catch (e) {
+              print('Error updating session: $e');
+              // Close loading dialog if it's open
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
+              
+              // Show error message
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.white),
+                      SizedBox(width: 10),
+                      Expanded(child: Text("Error updating session. Please try again.")),
+                    ],
+                  ),
+                  backgroundColor: Colors.red[700],
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  duration: Duration(seconds: 4),
+                ),
+              );
+            }
           }
-
-          // Exibe uma mensagem de sucesso
+        } catch (e) {
+          print('Error during Google sign in: $e');
+          // Close loading dialog if it's open
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          }
+          
+          // Show error message
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Login bem-sucedido com ${user.displayName}")),
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.white),
+                  SizedBox(width: 10),
+                  Expanded(child: Text("Error signing in with Google. Please try again.")),
+                ],
+              ),
+              backgroundColor: Colors.red[700],
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: Duration(seconds: 4),
+            ),
           );
-
-          SharedPreferences prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('isLoggedIn', true);
-          await prefs.setString('accessToken', googleAuth.accessToken ?? '');
-          await prefs.setString('idToken', googleAuth.idToken ?? '');
-
-          // Redirecione para a tela principal ou outra tela após o login
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => LoadingScreen()),
-          );
+        }
+      } else {
+        // Close loading dialog if it's open
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
         }
       }
     } catch (e) {
-      // Exibe uma mensagem de erro
+      print('Error initiating Google sign in: $e');
+      // Close loading dialog if it's open
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      
+      // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erro ao fazer login com Google: $e")),
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 10),
+              Expanded(child: Text("Error signing in with Google. Please try again.")),
+            ],
+          ),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: Duration(seconds: 4),
+        ),
       );
     }
   }
