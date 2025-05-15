@@ -1,7 +1,7 @@
 name: mywarranties
-description: "A new Flutter project."
+description: "A Flutter project for managing warranties and receipts."
 publish_to: 'none'
-version: 0.1.0
+version: 0.43.0
 
 environment:
   sdk: '>=3.1.3 <4.0.0'
