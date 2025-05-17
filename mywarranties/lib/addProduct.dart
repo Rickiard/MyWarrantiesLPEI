@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'list.dart';
+import 'package:file_picker/file_picker.dart';
 
 class AddProductPage extends StatefulWidget {
   @override
@@ -38,6 +39,11 @@ class _AddProductPageState extends State<AddProductPage> {
   final List<String> _timeUnits = ['days', 'months', 'years', 'lifetime'];
   String _selectedWarrantyUnit = 'days';
   String _selectedExtensionUnit = 'days';
+
+  // Variáveis de URL dos documentos
+  String? _receiptUrl;
+  String? _warrantyUrl;
+  String? _otherDocsUrl;
 
   @override
   void initState() {
@@ -92,21 +98,37 @@ class _AddProductPageState extends State<AddProductPage> {
     }
   }
 
-  Future<void> _pickFile(void Function(File) onFilePicked) async {
-    // TODO: Implement file picking functionality
-    // This would require adding a file picker package
-  }
-
-  Future<String?> _uploadFile(File file, String path) async {
-    try {
-      final ref = FirebaseStorage.instance.ref().child(path);
-      final uploadTask = ref.putFile(file);
-      final snapshot = await uploadTask;
-      return await snapshot.ref.getDownloadURL();
-    } catch (e) {
-      print('Error uploading file: $e');
-      return null;
+  Future<String?> _pickAndUploadDocument(String folder) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    final result = await FilePicker.platform.pickFiles(type: FileType.any);
+    if (result != null && result.files.single.path != null) {
+      final file = File(result.files.single.path!);
+      final ext = result.files.single.extension ?? 'file';
+      final storageRef = FirebaseStorage.instance.ref().child('$folder/${user.uid}/${DateTime.now()}.$ext');
+      try {
+        await storageRef.putFile(file);
+        final downloadUrl = await storageRef.getDownloadURL();
+        return downloadUrl;
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('Erro ao fazer upload do documento.')),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
+    return null;
   }
 
   Future<void> _submitForm() async {
@@ -118,23 +140,12 @@ class _AddProductPageState extends State<AddProductPage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('User not logged in');
 
-      // Upload files
+      // Upload da imagem do produto
       String? imageUrl;
-      String? receiptUrl;
-      String? warrantyUrl;
-      String? otherDocsUrl;
-
       if (_productImage != null) {
-        imageUrl = await _uploadFile(_productImage!, 'products/${user.uid}/${DateTime.now()}_image.jpg');
-      }
-      if (_receiptFile != null) {
-        receiptUrl = await _uploadFile(_receiptFile!, 'receipts/${user.uid}/${DateTime.now()}_receipt.pdf');
-      }
-      if (_warrantyFile != null) {
-        warrantyUrl = await _uploadFile(_warrantyFile!, 'warranties/${user.uid}/${DateTime.now()}_warranty.pdf');
-      }
-      if (_otherDocuments != null) {
-        otherDocsUrl = await _uploadFile(_otherDocuments!, 'documents/${user.uid}/${DateTime.now()}_other.pdf');
+        final storageRef = FirebaseStorage.instance.ref().child('products/${user.uid}/${DateTime.now()}_image.jpg');
+        await storageRef.putFile(_productImage!);
+        imageUrl = await storageRef.getDownloadURL();
       }
 
       // Format warranty period
@@ -169,9 +180,9 @@ class _AddProductPageState extends State<AddProductPage> {
         'brand': _brandController.text,
         'notes': _notesController.text,
         'imageUrl': imageUrl,
-        'receiptUrl': receiptUrl,
-        'warrantyUrl': warrantyUrl,
-        'otherDocumentsUrl': otherDocsUrl,
+        'receiptUrl': _receiptUrl,
+        'warrantyUrl': _warrantyUrl,
+        'otherDocumentsUrl': _otherDocsUrl,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -465,7 +476,11 @@ class _AddProductPageState extends State<AddProductPage> {
                 children: [
                   Expanded(child: Text('Receipt')),
                   ElevatedButton(
-                    onPressed: () => _pickFile((file) => setState(() => _receiptFile = file)),
+                    onPressed: () async {
+                      final url = await _pickAndUploadDocument('receipts');
+                      if (url != null) setState(() => _receiptFile = File(''));
+                      _receiptUrl = url;
+                    },
                     child: Text('Upload file'),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
                   ),
@@ -478,7 +493,11 @@ class _AddProductPageState extends State<AddProductPage> {
                 children: [
                   Expanded(child: Text('Warranty')),
                   ElevatedButton(
-                    onPressed: () => _pickFile((file) => setState(() => _warrantyFile = file)),
+                    onPressed: () async {
+                      final url = await _pickAndUploadDocument('warranties');
+                      if (url != null) setState(() => _warrantyFile = File(''));
+                      _warrantyUrl = url;
+                    },
                     child: Text('Upload file'),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
                   ),
@@ -491,7 +510,11 @@ class _AddProductPageState extends State<AddProductPage> {
                 children: [
                   Expanded(child: Text('Other Documents')),
                   ElevatedButton(
-                    onPressed: () => _pickFile((file) => setState(() => _otherDocuments = file)),
+                    onPressed: () async {
+                      final url = await _pickAndUploadDocument('documents');
+                      if (url != null) setState(() => _otherDocuments = File(''));
+                      _otherDocsUrl = url;
+                    },
                     child: Text('Upload file'),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
                   ),

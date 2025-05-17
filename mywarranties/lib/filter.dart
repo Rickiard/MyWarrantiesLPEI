@@ -733,24 +733,49 @@ class _FilterPageState extends State<FilterPage> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.grey.shade300),
       ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: items.map((item) {
-          final isSelected = selectedItems.contains(item);
-          return FilterChip(
-            selected: isSelected,
-            label: Text(item),
-            backgroundColor: Colors.white,
-            selectedColor: Colors.blue.shade100,
-            checkmarkColor: Colors.blue,
-            side: BorderSide(color: Colors.grey.shade300),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: items.map((item) {
+              final isSelected = selectedItems.contains(item);
+              return FilterChip(
+                selected: isSelected,
+                label: Text(
+                  item,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isSelected ? Colors.blue : Colors.black87,
+                  ),
+                ),
+                backgroundColor: Colors.white,
+                selectedColor: Colors.blue.shade100,
+                checkmarkColor: Colors.blue,
+                side: BorderSide(color: Colors.grey.shade300),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onSelected: (selected) => onSelected(item, selected),
+              );
+            }).toList(),
+          ),
+          if (items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(
+                'No options available',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 13,
+                ),
+              ),
             ),
-            onSelected: (selected) => onSelected(item, selected),
-          );
-        }).toList(),
+        ],
       ),
     );
   }

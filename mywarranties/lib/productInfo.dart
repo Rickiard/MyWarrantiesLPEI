@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart';
 
 class ProductInfoPage extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -193,9 +195,32 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      setState(() {
-        widget.product['imageUrl'] = pickedFile.path;
-      });
+      try {
+        final user = _auth.currentUser;
+        if (user == null) return;
+        final storageRef = FirebaseStorage.instance.ref().child('products/${user.uid}/${DateTime.now()}_image.jpg');
+        await storageRef.putFile(File(pickedFile.path));
+        final downloadUrl = await storageRef.getDownloadURL();
+        setState(() {
+          widget.product['imageUrl'] = downloadUrl;
+        });
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('Erro ao fazer upload da imagem.')),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -210,6 +235,40 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
       setState(() {
         product[key] = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
       });
+    }
+  }
+
+  Future<void> _pickAndUploadDocument(String field) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final result = await FilePicker.platform.pickFiles(type: FileType.any);
+    if (result != null && result.files.single.path != null) {
+      final file = File(result.files.single.path!);
+      final ext = result.files.single.extension ?? 'file';
+      final storageRef = FirebaseStorage.instance.ref().child('documents/${user.uid}/${DateTime.now()}_$field.$ext');
+      try {
+        await storageRef.putFile(file);
+        final downloadUrl = await storageRef.getDownloadURL();
+        setState(() {
+          widget.product[field] = downloadUrl;
+        });
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('Erro ao fazer upload do documento.')),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -345,8 +404,8 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                   child: widget.product['imageUrl'] != null && widget.product['imageUrl'].toString().isNotEmpty
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.file(
-                            File(widget.product['imageUrl']),
+                          child: Image.network(
+                            widget.product['imageUrl'],
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return const Icon(Icons.image_not_supported, size: 60, color: Colors.grey);
@@ -498,15 +557,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                   ),
                   ElevatedButton(
                     onPressed: _isEditing
-                        ? () async {
-                            final picker = ImagePicker();
-                            final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-                            if (pickedFile != null) {
-                              setState(() {
-                                widget.product['receiptUrl'] = pickedFile.path;
-                              });
-                            }
-                          }
+                        ? () => _pickAndUploadDocument('receiptUrl')
                         : null,
                     child: const Text('Upload'),
                   ),
@@ -547,15 +598,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                   ),
                   ElevatedButton(
                     onPressed: _isEditing
-                        ? () async {
-                            final picker = ImagePicker();
-                            final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-                            if (pickedFile != null) {
-                              setState(() {
-                                widget.product['warrantyUrl'] = pickedFile.path;
-                              });
-                            }
-                          }
+                        ? () => _pickAndUploadDocument('warrantyUrl')
                         : null,
                     child: const Text('Upload'),
                   ),
@@ -596,15 +639,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                   ),
                   ElevatedButton(
                     onPressed: _isEditing
-                        ? () async {
-                            final picker = ImagePicker();
-                            final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-                            if (pickedFile != null) {
-                              setState(() {
-                                widget.product['otherDocumentsUrl'] = pickedFile.path;
-                              });
-                            }
-                          }
+                        ? () => _pickAndUploadDocument('otherDocumentsUrl')
                         : null,
                     child: const Text('Upload'),
                   ),

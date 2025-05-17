@@ -914,6 +914,13 @@ class _ProfilePageState extends State<ProfilePage> {
         final downloadUrl = await storageRef.getDownloadURL();
         await _auth.currentUser?.updatePhotoURL(downloadUrl);
 
+        // Salvar o URL da foto no Firestore
+        if (_auth.currentUser?.uid != null) {
+          await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
+            'photoURL': downloadUrl,
+          }, SetOptions(merge: true));
+        }
+
         setState(() {}); // Refresh the UI
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -949,6 +956,20 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  // Adicionar método auxiliar para buscar foto do Firestore se não houver no Auth
+  Future<String?> _getProfilePhotoUrl() async {
+    if (_auth.currentUser?.photoURL != null && _auth.currentUser!.photoURL!.isNotEmpty) {
+      return _auth.currentUser!.photoURL;
+    }
+    if (_auth.currentUser?.uid != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).get();
+      if (doc.exists && doc.data()?['photoURL'] != null) {
+        return doc.data()!['photoURL'] as String;
+      }
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -980,36 +1001,42 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       SizedBox(height: 30),
                       // Profile Picture
-                      Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          CircleAvatar(
-                            radius: 60,
-                            backgroundColor: Colors.white,
-                            backgroundImage: _auth.currentUser?.photoURL != null
-                                ? NetworkImage(_auth.currentUser!.photoURL!)
-                                : null,
-                            child: _auth.currentUser?.photoURL == null
-                                ? Icon(
-                                    Icons.person,
-                                    size: 80,
-                                    color: Colors.grey[400],
-                                  )
-                                : null,
-                          ),
-                          GestureDetector(
-                            onTap: _changeProfilePicture,
-                            child: CircleAvatar(
-                              radius: 18,
-                              backgroundColor: Colors.white,
-                              child: Icon(
-                                Icons.camera_alt,
-                                size: 18,
-                                color: Colors.black87,
+                      FutureBuilder<String?>(
+                        future: _getProfilePhotoUrl(),
+                        builder: (context, snapshot) {
+                          final photoUrl = snapshot.data;
+                          return Stack(
+                            alignment: Alignment.bottomRight,
+                            children: [
+                              CircleAvatar(
+                                radius: 60,
+                                backgroundColor: Colors.white,
+                                backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                                    ? NetworkImage(photoUrl)
+                                    : null,
+                                child: (photoUrl == null || photoUrl.isEmpty)
+                                    ? Icon(
+                                        Icons.person,
+                                        size: 80,
+                                        color: Colors.grey[400],
+                                      )
+                                    : null,
                               ),
-                            ),
-                          ),
-                        ],
+                              GestureDetector(
+                                onTap: _changeProfilePicture,
+                                child: CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: Colors.white,
+                                  child: Icon(
+                                    Icons.camera_alt,
+                                    size: 18,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       SizedBox(height: 30),
                       // User Information Section

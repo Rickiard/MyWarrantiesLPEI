@@ -73,7 +73,6 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     );
 
     _scrollController.addListener(_handleScroll);
-    _searchController.addListener(_handleSearch);
   }
 
   void _handleScroll() {
@@ -499,7 +498,6 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   @override
   void dispose() {
     _scrollController.removeListener(_handleScroll);
-    _searchController.removeListener(_handleSearch);
     _scrollController.dispose();
     _animationController.dispose();
     _searchController.dispose();
@@ -928,20 +926,27 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                           children: [
                                             ClipRRect(
                                               borderRadius: BorderRadius.circular(8),
-                                              child: Image.network(
-                                                product['imageUrl'] ?? '',
-                                                width: 120,
-                                                height: 120,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (context, error, stackTrace) {
-                                                  return Container(
-                                                    width: 120,
-                                                    height: 120,
-                                                    color: Colors.grey[300],
-                                                    child: const Icon(Icons.image_not_supported),
-                                                  );
-                                                },
-                                              ),
+                                              child: (product['imageUrl'] != null && (product['imageUrl'] as String).isNotEmpty)
+                                                  ? Image.network(
+                                                      product['imageUrl'],
+                                                      width: 120,
+                                                      height: 120,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder: (context, error, stackTrace) {
+                                                        return Container(
+                                                          width: 120,
+                                                          height: 120,
+                                                          color: Colors.grey[300],
+                                                          child: const Icon(Icons.broken_image, size: 40),
+                                                        );
+                                                      },
+                                                    )
+                                                  : Container(
+                                                      width: 120,
+                                                      height: 120,
+                                                      color: Colors.grey[300],
+                                                      child: const Icon(Icons.image, size: 40, color: Colors.grey),
+                                                    ),
                                             ),
                                             const SizedBox(width: 16),
                                             Expanded(
@@ -1052,8 +1057,43 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                     onChanged: (value) {
                       setState(() {
                         _searchQuery = value.toLowerCase();
+                        if (_searchQuery.isEmpty) {
+                          _products = List.from(_allProducts);
+                        } else {
+                          _products = _allProducts.where((product) {
+                            final name = (product['name'] ?? '').toString().toLowerCase();
+                            final category = (product['category'] ?? '').toString().toLowerCase();
+                            final price = (product['price'] ?? '').toString().toLowerCase();
+                            final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
+                            final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
+                            final warrantyUnit = (product['warrantyUnit'] ?? '').toString().toLowerCase();
+                            final warrantyExtension = (product['warrantyExtension'] ?? '').toString().toLowerCase();
+                            final warrantyExtensionUnit = (product['warrantyExtensionUnit'] ?? '').toString().toLowerCase();
+                            final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
+                            final brand = (product['brand'] ?? '').toString().toLowerCase();
+                            final notes = (product['notes'] ?? '').toString().toLowerCase();
+                            final imageUrl = (product['imageUrl'] ?? '').toString().toLowerCase();
+                            final receiptUrl = (product['receiptUrl'] ?? '').toString().toLowerCase();
+                            final warrantyUrl = (product['warrantyUrl'] ?? '').toString().toLowerCase();
+                            final otherDocumentsUrl = (product['otherDocumentsUrl'] ?? '').toString().toLowerCase();
+                            return name.contains(_searchQuery) ||
+                                   category.contains(_searchQuery) ||
+                                   price.contains(_searchQuery) ||
+                                   purchaseDate.contains(_searchQuery) ||
+                                   warrantyPeriod.contains(_searchQuery) ||
+                                   warrantyUnit.contains(_searchQuery) ||
+                                   warrantyExtension.contains(_searchQuery) ||
+                                   warrantyExtensionUnit.contains(_searchQuery) ||
+                                   storeDetails.contains(_searchQuery) ||
+                                   brand.contains(_searchQuery) ||
+                                   notes.contains(_searchQuery) ||
+                                   imageUrl.contains(_searchQuery) ||
+                                   receiptUrl.contains(_searchQuery) ||
+                                   warrantyUrl.contains(_searchQuery) ||
+                                   otherDocumentsUrl.contains(_searchQuery);
+                          }).toList();
+                        }
                       });
-                      _handleSearch();
                     },
                     decoration: InputDecoration(
                       hintText: 'Search products...',
