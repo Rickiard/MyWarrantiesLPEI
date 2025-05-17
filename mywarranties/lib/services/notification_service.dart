@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -16,7 +16,6 @@ class NotificationService {
   NotificationService._internal();
 
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -32,20 +31,125 @@ class NotificationService {
   static const int _expiryDayNotificationId = 4;
 
   Future<void> init() async {
-    // Initialize timezone data
+    await AwesomeNotifications().initialize(
+      '@mipmap/ic_launcher',
+      [
+        NotificationChannel(
+          channelKey: 'warranty_reminders',
+          channelName: 'Warranty Reminders',
+          channelDescription: 'Notifications for warranty expiration reminders',
+          defaultColor: Colors.blue,
+          ledColor: Colors.blue,
+          importance: NotificationImportance.High,
+          channelShowBadge: true,
+          enableVibration: true,
+          enableLights: true,
+        ),
+      ],
+      debug: true,
+    );
+
+    // Request notification permissions
+    await AwesomeNotifications().isNotificationAllowed().then((isAllowed) {
+      if (!isAllowed) {
+        AwesomeNotifications().requestPermissionToSendNotifications();
+      }
+    });
+
+    // Listen to notification events
+    AwesomeNotifications().setListeners(
+      onActionReceivedMethod: _onNotificationTapped,
+      onNotificationCreatedMethod: _onNotificationCreated,
+      onNotificationDisplayedMethod: _onNotificationDisplayed,
+      onDismissActionReceivedMethod: _onNotificationDismissed,
+    );
+
+    // Initialize timezone
     tz_data.initializeTimeZones();
-
-    // Request permission for notifications
-    await _requestPermissions();
-
-    // Initialize local notifications
-    await _initializeLocalNotifications();
 
     // Initialize Firebase Messaging
     await _initializeFirebaseMessaging();
+  }
 
-    // Schedule warranty expiry checks
-    await scheduleWarrantyExpiryChecks();
+  Future<void> _onNotificationCreated(ReceivedNotification receivedNotification) async {
+    // Handle notification creation
+  }
+
+  Future<void> _onNotificationDisplayed(ReceivedNotification receivedNotification) async {
+    // Handle notification display
+  }
+
+  Future<void> _onNotificationDismissed(ReceivedAction receivedAction) async {
+    // Handle notification dismissal
+  }
+
+  Future<void> _onNotificationTapped(ReceivedAction receivedAction) async {
+    // Handle notification tap
+    debugPrint('Notification tapped: ${receivedAction.payload}');
+  }
+
+  Future<void> showNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+    DateTime? scheduledDate,
+  }) async {
+    if (scheduledDate != null) {
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: id,
+          channelKey: 'warranty_reminders',
+          title: title,
+          body: body,
+          payload: {'data': payload ?? ''},
+          notificationLayout: NotificationLayout.Default,
+        ),
+        schedule: NotificationCalendar.fromDate(date: scheduledDate),
+      );
+    } else {
+      await AwesomeNotifications().createNotification(
+        content: NotificationContent(
+          id: id,
+          channelKey: 'warranty_reminders',
+          title: title,
+          body: body,
+          payload: {'data': payload ?? ''},
+          notificationLayout: NotificationLayout.Default,
+        ),
+      );
+    }
+  }
+
+  Future<void> cancelNotification(int id) async {
+    await AwesomeNotifications().cancel(id);
+  }
+
+  Future<void> cancelAllNotifications() async {
+    await AwesomeNotifications().cancelAll();
+  }
+
+  Future<void> scheduleWarrantyReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime expirationDate,
+    String? payload,
+  }) async {
+    // Schedule notification 7 days before expiration
+    final reminderDate = expirationDate.subtract(const Duration(days: 7));
+    
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: id,
+        channelKey: 'warranty_reminders',
+        title: title,
+        body: body,
+        payload: {'data': payload ?? ''},
+        notificationLayout: NotificationLayout.Default,
+      ),
+      schedule: NotificationCalendar.fromDate(date: reminderDate),
+    );
   }
 
   Future<void> _requestPermissions() async {
@@ -58,75 +162,6 @@ class NotificationService {
     );
 
     print('User granted permission: ${settings.authorizationStatus}');
-
-    // Request permission for local notifications on Android
-    // Note: For newer versions of the plugin, we would use requestPermission()
-    // but for compatibility we're using the notification channel approach
-    final androidImplementation = _localNotifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    
-    if (androidImplementation != null) {
-      // Create the notification channel which implicitly requests permission
-      await androidImplementation.createNotificationChannel(
-        const AndroidNotificationChannel(
-          _warrantyChannelId,
-          _warrantyChannelName,
-          description: _warrantyChannelDescription,
-          importance: Importance.high,
-        ),
-      );
-    }
-  }
-
-  Future<void> _initializeLocalNotifications() async {
-    // Initialize settings for Android
-    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    // Initialize settings for iOS
-    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    // Initialize settings for all platforms
-    const InitializationSettings initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-
-    // Initialize the plugin
-    await _localNotifications.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
-    );
-
-    // Create the notification channel for Android
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(
-          const AndroidNotificationChannel(
-            _warrantyChannelId,
-            _warrantyChannelName,
-            description: _warrantyChannelDescription,
-            importance: Importance.high,
-          ),
-        );
-  }
-
-  void _onNotificationTapped(NotificationResponse response) {
-    // Handle notification tap
-    if (response.payload != null) {
-      final Map<String, dynamic> data = json.decode(response.payload!);
-      
-      // You can navigate to a specific screen here based on the payload
-      print('Notification tapped with payload: $data');
-      
-      // Example: Navigate to product details page
-      // Navigator.of(context).push(MaterialPageRoute(
-      //   builder: (context) => ProductInfoPage(productId: data['productId']),
-      // ));
-    }
   }
 
   Future<void> _initializeFirebaseMessaging() async {
@@ -161,7 +196,8 @@ class NotificationService {
         print('Message also contained a notification: ${message.notification}');
         
         // Show a local notification
-        _showLocalNotification(
+        showNotification(
+          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
           title: message.notification!.title ?? 'Warranty Notification',
           body: message.notification!.body ?? '',
           payload: json.encode(message.data),
@@ -171,40 +207,6 @@ class NotificationService {
 
     // Handle background/terminated messages
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  }
-
-  Future<void> _showLocalNotification({
-    required String title,
-    required String body,
-    String? payload,
-  }) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      _warrantyChannelId,
-      _warrantyChannelName,
-      channelDescription: _warrantyChannelDescription,
-      importance: Importance.high,
-      priority: Priority.high,
-      showWhen: true,
-    );
-
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _localNotifications.show(
-      0, // Notification ID
-      title,
-      body,
-      platformDetails,
-      payload: payload,
-    );
   }
 
   Future<void> scheduleWarrantyExpiryChecks() async {
@@ -258,105 +260,54 @@ class NotificationService {
         }
       }
       
-      final productsCollection = userDoc.collection('products');
-      final snapshot = await productsCollection.get();
+      // Get all warranties
+      final warrantiesSnapshot = await _firestore
+          .collection('users')
+          .doc(_auth.currentUser!.uid)
+          .collection('warranties')
+          .get();
+      
       final now = DateTime.now();
       
-      for (var doc in snapshot.docs) {
+      for (var doc in warrantiesSnapshot.docs) {
         final data = doc.data();
-        final String? purchaseDate = data['purchaseDate'];
-        final String? warrantyPeriod = data['warrantyPeriod'];
-        final String? warrantyExtension = data['warrantyExtension'];
-        final String productName = data['name'] ?? 'Your product';
+        final expiryDate = (data['expiryDate'] as Timestamp).toDate();
+        final daysUntilExpiry = expiryDate.difference(now).inDays;
         
-        if (purchaseDate != null && warrantyPeriod != null) {
-          try {
-            final expiryDate = calculateExpiryDate(purchaseDate, warrantyPeriod, warrantyExtension);
-            
-            if (expiryDate != null) {
-              final difference = expiryDate.difference(now).inDays;
-              
-              // Schedule notifications based on the difference and user preferences
-              if (difference <= 30 && difference > 7 && notifyThirtyDays) {
-                // 30 days before expiry
-                scheduleNotification(
-                  id: _thirtyDaysNotificationId,
-                  title: 'Warranty Expiring Soon',
-                  body: '$productName warranty expires in 30 days on ${_formatDate(expiryDate)}',
-                  scheduledDate: now,
-                  payload: json.encode({'productId': doc.id}),
-                );
-              } else if (difference <= 7 && difference > 1 && notifySevenDays) {
-                // 7 days before expiry
-                scheduleNotification(
-                  id: _sevenDaysNotificationId,
-                  title: 'Warranty Expiring Very Soon',
-                  body: '$productName warranty expires in 7 days on ${_formatDate(expiryDate)}',
-                  scheduledDate: now,
-                  payload: json.encode({'productId': doc.id}),
-                );
-              } else if (difference == 1 && notifyOneDay) {
-                // 24 hours before expiry
-                scheduleNotification(
-                  id: _oneDayNotificationId,
-                  title: 'Warranty Expires Tomorrow',
-                  body: '$productName warranty expires tomorrow on ${_formatDate(expiryDate)}',
-                  scheduledDate: now,
-                  payload: json.encode({'productId': doc.id}),
-                );
-              } else if (difference == 0 && notifyExpiryDay) {
-                // Day of expiry
-                scheduleNotification(
-                  id: _expiryDayNotificationId,
-                  title: 'Warranty Expired Today',
-                  body: '$productName warranty has expired today',
-                  scheduledDate: now,
-                  payload: json.encode({'productId': doc.id}),
-                );
-              }
-            }
-          } catch (e) {
-            print('Error calculating expiry date for product ${doc.id}: $e');
-          }
+        // Check if we should notify based on days until expiry
+        if (daysUntilExpiry == 30 && notifyThirtyDays) {
+          await showNotification(
+            id: _thirtyDaysNotificationId,
+            title: 'Warranty Expiring Soon',
+            body: '${data['productName']} warranty expires in 30 days',
+            payload: json.encode({'warrantyId': doc.id}),
+          );
+        } else if (daysUntilExpiry == 7 && notifySevenDays) {
+          await showNotification(
+            id: _sevenDaysNotificationId,
+            title: 'Warranty Expiring Soon',
+            body: '${data['productName']} warranty expires in 7 days',
+            payload: json.encode({'warrantyId': doc.id}),
+          );
+        } else if (daysUntilExpiry == 1 && notifyOneDay) {
+          await showNotification(
+            id: _oneDayNotificationId,
+            title: 'Warranty Expiring Tomorrow',
+            body: '${data['productName']} warranty expires tomorrow',
+            payload: json.encode({'warrantyId': doc.id}),
+          );
+        } else if (daysUntilExpiry == 0 && notifyExpiryDay) {
+          await showNotification(
+            id: _expiryDayNotificationId,
+            title: 'Warranty Expired',
+            body: '${data['productName']} warranty has expired today',
+            payload: json.encode({'warrantyId': doc.id}),
+          );
         }
       }
     } catch (e) {
       print('Error checking warranties: $e');
     }
-  }
-
-  Future<void> scheduleNotification({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-    String? payload,
-  }) async {
-    final tz.TZDateTime tzScheduledDate = tz.TZDateTime.from(scheduledDate, tz.local);
-
-    await _localNotifications.zonedSchedule(
-      id,
-      title,
-      body,
-      tzScheduledDate,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _warrantyChannelId,
-          _warrantyChannelName,
-          channelDescription: _warrantyChannelDescription,
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-      payload: payload,
-    );
   }
 
   DateTime? calculateExpiryDate(String purchaseDate, String warrantyPeriod, String? warrantyExtension) {
@@ -388,54 +339,11 @@ class NotificationService {
     }
     return 0;
   }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
 }
 
-// This function must be top-level (not a class method)
+// This needs to be a top-level function
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // This function will handle background messages
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   print('Handling a background message: ${message.messageId}');
-  
-  // Initialize Firebase if needed
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.android,
-  );
-  
-  // You can't show UI here, but you can process the message data
-  // and schedule a local notification if needed
-  if (message.notification != null) {
-    // Create a local notification instance
-    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-    
-    // Initialize settings for Android
-    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const DarwinInitializationSettings iosSettings = DarwinInitializationSettings();
-    const InitializationSettings initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
-    
-    await flutterLocalNotificationsPlugin.initialize(initSettings);
-    
-    // Create notification details
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'warranty_expiry_channel',
-      'Warranty Expiry Notifications',
-      channelDescription: 'Notifications for warranty expiry dates',
-      importance: Importance.high,
-      priority: Priority.high,
-    );
-    
-    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
-    
-    // Show the notification
-    await flutterLocalNotificationsPlugin.show(
-      0, // Notification ID
-      message.notification!.title ?? 'Warranty Notification',
-      message.notification!.body ?? '',
-      platformDetails,
-      payload: json.encode(message.data),
-    );
-  }
 }
