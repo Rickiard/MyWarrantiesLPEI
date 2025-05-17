@@ -33,7 +33,7 @@ android {
         // minSdk = flutter.minSdkVersion
         // targetSdk = flutter.targetSdkVersion
         minSdk = 23
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -42,30 +42,15 @@ android {
         }
     }
 
-    signingConfigs {
-        create("release") {
-            // You'll need to create a keystore file and add these values
-            // For now, we'll use debug signing for testing
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
     buildTypes {
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
-        }
         debug {
             isMinifyEnabled = false
             isShrinkResources = false
+        }
+        release {
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Use the default debug signing config
-            signingConfig = null
         }
     }
 
