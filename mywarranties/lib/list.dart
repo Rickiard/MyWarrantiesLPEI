@@ -93,8 +93,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
 
   void _handleSearch() {
     setState(() {
+      _searchQuery = _searchController.text.toLowerCase();
       if (_searchQuery.isEmpty) {
-        _products = _allProducts; // Show the entire list if the search query is empty
+        _products = List.from(_allProducts); // Create a new list to trigger rebuild
       } else {
         _products = _allProducts.where((product) {
           final name = (product['name'] ?? '').toString().toLowerCase();
@@ -102,18 +103,32 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
           final price = (product['price'] ?? '').toString().toLowerCase();
           final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
           final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
+          final warrantyUnit = (product['warrantyUnit'] ?? '').toString().toLowerCase();
+          final warrantyExtension = (product['warrantyExtension'] ?? '').toString().toLowerCase();
+          final warrantyExtensionUnit = (product['warrantyExtensionUnit'] ?? '').toString().toLowerCase();
           final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
           final brand = (product['brand'] ?? '').toString().toLowerCase();
           final notes = (product['notes'] ?? '').toString().toLowerCase();
+          final imageUrl = (product['imageUrl'] ?? '').toString().toLowerCase();
+          final receiptUrl = (product['receiptUrl'] ?? '').toString().toLowerCase();
+          final warrantyUrl = (product['warrantyUrl'] ?? '').toString().toLowerCase();
+          final otherDocumentsUrl = (product['otherDocumentsUrl'] ?? '').toString().toLowerCase();
 
           return name.contains(_searchQuery) ||
                  category.contains(_searchQuery) ||
                  price.contains(_searchQuery) ||
                  purchaseDate.contains(_searchQuery) ||
                  warrantyPeriod.contains(_searchQuery) ||
+                 warrantyUnit.contains(_searchQuery) ||
+                 warrantyExtension.contains(_searchQuery) ||
+                 warrantyExtensionUnit.contains(_searchQuery) ||
                  storeDetails.contains(_searchQuery) ||
                  brand.contains(_searchQuery) ||
-                 notes.contains(_searchQuery);
+                 notes.contains(_searchQuery) ||
+                 imageUrl.contains(_searchQuery) ||
+                 receiptUrl.contains(_searchQuery) ||
+                 warrantyUrl.contains(_searchQuery) ||
+                 otherDocumentsUrl.contains(_searchQuery);
         }).toList();
       }
     });
@@ -195,14 +210,14 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       final productsCollection = userDoc.collection('products');
       
       final snapshot = await productsCollection.get();
-      List<Map<String, dynamic>> allProducts = snapshot.docs.map((doc) => {
+      _allProducts = snapshot.docs.map((doc) => {
         'id': doc.id,
         ...doc.data(),
       }).toList();
 
       // Apply filters if any
       if (_activeFilters.isNotEmpty) {
-        allProducts = allProducts.where((product) {
+        _allProducts = _allProducts.where((product) {
           // Product name filter (contains match, case insensitive)
           if (_activeFilters['name']?.isNotEmpty ?? false) {
             final name = (product['name'] ?? '').toString().toLowerCase();
@@ -372,85 +387,43 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
         }).toList();
       }
 
-      // Apply search query with improved matching
+      // Apply search if there's an active search query
       if (_searchQuery.isNotEmpty) {
-        final query = _searchQuery.toLowerCase();
-        allProducts = allProducts.where((product) {
-          final searchableFields = [
-            product['name']?.toString() ?? '',
-            product['category']?.toString() ?? '',
-            product['price']?.toString() ?? '',
-            product['purchaseDate']?.toString() ?? '',
-            product['warrantyPeriod']?.toString() ?? '',
-            product['warrantyExtension']?.toString() ?? '',
-            product['storeDetails']?.toString() ?? '',
-            product['brand']?.toString() ?? '',
-            product['notes']?.toString() ?? '',
-          ];
-          
-          return searchableFields.any((field) => 
-            field.toLowerCase().contains(query));
-        }).toList();
-      }
+        _products = _allProducts.where((product) {
+          final name = (product['name'] ?? '').toString().toLowerCase();
+          final category = (product['category'] ?? '').toString().toLowerCase();
+          final price = (product['price'] ?? '').toString().toLowerCase();
+          final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
+          final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
+          final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
+          final brand = (product['brand'] ?? '').toString().toLowerCase();
+          final notes = (product['notes'] ?? '').toString().toLowerCase();
 
-      // Apply sorting with improved comparisons
-      if (_activeFilters.containsKey('sortField') && _activeFilters['sortField']!.isNotEmpty) {
-        final sortField = _activeFilters['sortField']!;
-        final isAscending = (_activeFilters['sortDirection'] ?? 'asc') == 'asc';
-        
-        allProducts.sort((a, b) {
-          var valueA = a[sortField];
-          var valueB = b[sortField];
-          
-          // Handle null values
-          if (valueA == null && valueB == null) return 0;
-          if (valueA == null) return isAscending ? -1 : 1;
-          if (valueB == null) return isAscending ? 1 : -1;
-          
-          // Special handling for different field types
-          switch (sortField) {
-            case 'price':
-              final priceA = _parsePrice(valueA.toString());
-              final priceB = _parsePrice(valueB.toString());
-              return isAscending ? priceA.compareTo(priceB) : priceB.compareTo(priceA);
-              
-            case 'purchaseDate':
-              final dateA = DateTime.tryParse(valueA.toString()) ?? DateTime(1900);
-              final dateB = DateTime.tryParse(valueB.toString()) ?? DateTime(1900);
-              return isAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
-              
-            case 'warrantyPeriod':
-            case 'warrantyExtension':
-              final monthsA = _parseWarrantyToMonths(valueA.toString());
-              final monthsB = _parseWarrantyToMonths(valueB.toString());
-              // Handle lifetime warranty in sorting - improved logic
-              if (monthsA == -1 && monthsB == -1) return 0; // Both are lifetime
-              if (monthsA == -1) return isAscending ? 1 : -1; // A is lifetime, should be highest
-              if (monthsB == -1) return isAscending ? -1 : 1; // B is lifetime, should be highest
-              return isAscending ? monthsA.compareTo(monthsB) : monthsB.compareTo(monthsA);
-              
-            default:
-              // Default string comparison
-              return isAscending ? 
-                valueA.toString().compareTo(valueB.toString()) :
-                valueB.toString().compareTo(valueA.toString());
-          }
-        });
+          return name.contains(_searchQuery) ||
+                 category.contains(_searchQuery) ||
+                 price.contains(_searchQuery) ||
+                 purchaseDate.contains(_searchQuery) ||
+                 warrantyPeriod.contains(_searchQuery) ||
+                 storeDetails.contains(_searchQuery) ||
+                 brand.contains(_searchQuery) ||
+                 notes.contains(_searchQuery);
+        }).toList();
+      } else {
+        _products = List.from(_allProducts);
       }
 
       setState(() {
-        _products = allProducts;
-        _allProducts = allProducts;
         _isLoading = false;
+        _errorMessage = null;
       });
       
       // Check for warranty expiry dates and schedule notifications
-      _checkWarrantyExpiryDates(allProducts);
+      _checkWarrantyExpiryDates(_products);
 
     } catch (e) {
       setState(() {
-        _errorMessage = 'Unable to load your products. Please check your connection and try again.';
         _isLoading = false;
+        _errorMessage = 'Error loading products: $e';
       });
     }
   }
@@ -525,9 +498,11 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _scrollController.removeListener(_handleScroll);
+    _searchController.removeListener(_handleSearch);
     _scrollController.dispose();
     _animationController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 

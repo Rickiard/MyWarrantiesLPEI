@@ -1,11 +1,11 @@
 {
-    "name": "mywarranties",
-    "short_name": "mywarranties",
+    "name": "MyWarranties",
+    "short_name": "MyWarranties",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Manage Your Product Warranties – Never Lose a Thing!",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
