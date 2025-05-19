@@ -86,51 +86,10 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
 
     if (_scrollController.position.pixels > _lastScrollPosition && !_isBottomBarCollapsed) {
       setState(() => _isBottomBarCollapsed = true);
+    } else if (_scrollController.position.pixels <= 10 && _isBottomBarCollapsed) {
+      setState(() => _isBottomBarCollapsed = false);
     }
     _lastScrollPosition = _scrollController.position.pixels;
-  }
-
-  void _handleSearch() {
-    setState(() {
-      _searchQuery = _searchController.text.toLowerCase();
-      if (_searchQuery.isEmpty) {
-        _products = List.from(_allProducts); // Create a new list to trigger rebuild
-      } else {
-        _products = _allProducts.where((product) {
-          final name = (product['name'] ?? '').toString().toLowerCase();
-          final category = (product['category'] ?? '').toString().toLowerCase();
-          final price = (product['price'] ?? '').toString().toLowerCase();
-          final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
-          final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
-          final warrantyUnit = (product['warrantyUnit'] ?? '').toString().toLowerCase();
-          final warrantyExtension = (product['warrantyExtension'] ?? '').toString().toLowerCase();
-          final warrantyExtensionUnit = (product['warrantyExtensionUnit'] ?? '').toString().toLowerCase();
-          final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
-          final brand = (product['brand'] ?? '').toString().toLowerCase();
-          final notes = (product['notes'] ?? '').toString().toLowerCase();
-          final imageUrl = (product['imageUrl'] ?? '').toString().toLowerCase();
-          final receiptUrl = (product['receiptUrl'] ?? '').toString().toLowerCase();
-          final warrantyUrl = (product['warrantyUrl'] ?? '').toString().toLowerCase();
-          final otherDocumentsUrl = (product['otherDocumentsUrl'] ?? '').toString().toLowerCase();
-
-          return name.contains(_searchQuery) ||
-                 category.contains(_searchQuery) ||
-                 price.contains(_searchQuery) ||
-                 purchaseDate.contains(_searchQuery) ||
-                 warrantyPeriod.contains(_searchQuery) ||
-                 warrantyUnit.contains(_searchQuery) ||
-                 warrantyExtension.contains(_searchQuery) ||
-                 warrantyExtensionUnit.contains(_searchQuery) ||
-                 storeDetails.contains(_searchQuery) ||
-                 brand.contains(_searchQuery) ||
-                 notes.contains(_searchQuery) ||
-                 imageUrl.contains(_searchQuery) ||
-                 receiptUrl.contains(_searchQuery) ||
-                 warrantyUrl.contains(_searchQuery) ||
-                 otherDocumentsUrl.contains(_searchQuery);
-        }).toList();
-      }
-    });
   }
 
   Future<void> _addProduct() async {
@@ -390,22 +349,8 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       if (_searchQuery.isNotEmpty) {
         _products = _allProducts.where((product) {
           final name = (product['name'] ?? '').toString().toLowerCase();
-          final category = (product['category'] ?? '').toString().toLowerCase();
-          final price = (product['price'] ?? '').toString().toLowerCase();
-          final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
-          final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
-          final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
-          final brand = (product['brand'] ?? '').toString().toLowerCase();
-          final notes = (product['notes'] ?? '').toString().toLowerCase();
 
-          return name.contains(_searchQuery) ||
-                 category.contains(_searchQuery) ||
-                 price.contains(_searchQuery) ||
-                 purchaseDate.contains(_searchQuery) ||
-                 warrantyPeriod.contains(_searchQuery) ||
-                 storeDetails.contains(_searchQuery) ||
-                 brand.contains(_searchQuery) ||
-                 notes.contains(_searchQuery);
+          return name.contains(_searchQuery);
         }).toList();
       } else {
         _products = List.from(_allProducts);
@@ -1062,35 +1007,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                         } else {
                           _products = _allProducts.where((product) {
                             final name = (product['name'] ?? '').toString().toLowerCase();
-                            final category = (product['category'] ?? '').toString().toLowerCase();
-                            final price = (product['price'] ?? '').toString().toLowerCase();
-                            final purchaseDate = (product['purchaseDate'] ?? '').toString().toLowerCase();
-                            final warrantyPeriod = (product['warrantyPeriod'] ?? '').toString().toLowerCase();
-                            final warrantyUnit = (product['warrantyUnit'] ?? '').toString().toLowerCase();
-                            final warrantyExtension = (product['warrantyExtension'] ?? '').toString().toLowerCase();
-                            final warrantyExtensionUnit = (product['warrantyExtensionUnit'] ?? '').toString().toLowerCase();
-                            final storeDetails = (product['storeDetails'] ?? '').toString().toLowerCase();
-                            final brand = (product['brand'] ?? '').toString().toLowerCase();
-                            final notes = (product['notes'] ?? '').toString().toLowerCase();
-                            final imageUrl = (product['imageUrl'] ?? '').toString().toLowerCase();
-                            final receiptUrl = (product['receiptUrl'] ?? '').toString().toLowerCase();
-                            final warrantyUrl = (product['warrantyUrl'] ?? '').toString().toLowerCase();
-                            final otherDocumentsUrl = (product['otherDocumentsUrl'] ?? '').toString().toLowerCase();
-                            return name.contains(_searchQuery) ||
-                                   category.contains(_searchQuery) ||
-                                   price.contains(_searchQuery) ||
-                                   purchaseDate.contains(_searchQuery) ||
-                                   warrantyPeriod.contains(_searchQuery) ||
-                                   warrantyUnit.contains(_searchQuery) ||
-                                   warrantyExtension.contains(_searchQuery) ||
-                                   warrantyExtensionUnit.contains(_searchQuery) ||
-                                   storeDetails.contains(_searchQuery) ||
-                                   brand.contains(_searchQuery) ||
-                                   notes.contains(_searchQuery) ||
-                                   imageUrl.contains(_searchQuery) ||
-                                   receiptUrl.contains(_searchQuery) ||
-                                   warrantyUrl.contains(_searchQuery) ||
-                                   otherDocumentsUrl.contains(_searchQuery);
+                            return name.contains(_searchQuery);
                           }).toList();
                         }
                       });
