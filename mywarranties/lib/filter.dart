@@ -479,13 +479,16 @@ class _FilterPageState extends State<FilterPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
               // Product Name
               TextFormField(
                 controller: _nameController,
@@ -703,8 +706,10 @@ class _FilterPageState extends State<FilterPage> {
                     ),
                   ),
                 ],
-              ),
-            ],
+                  ),
+                ]);
+              }
+                          ),
           ),
         ),
       ),
@@ -734,48 +739,57 @@ class _FilterPageState extends State<FilterPage> {
         border: Border.all(color: Colors.grey.shade300),
       ),
       padding: const EdgeInsets.all(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: items.map((item) {
-              final isSelected = selectedItems.contains(item);
-              return FilterChip(
-                selected: isSelected,
-                label: Text(
-                  item,
+      constraints: BoxConstraints(
+        minHeight: 50,
+        maxHeight: 200, // Altura máxima para evitar overflow vertical extremo
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.start,
+              crossAxisAlignment: WrapCrossAlignment.start,
+              children: items.map((item) {
+                final isSelected = selectedItems.contains(item);
+                return FilterChip(
+                  selected: isSelected,
+                  label: Text(
+                    item,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isSelected ? Colors.blue : Colors.black87,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  backgroundColor: Colors.white,
+                  selectedColor: Colors.blue.shade100,
+                  checkmarkColor: Colors.blue,
+                  side: BorderSide(color: Colors.grey.shade300),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onSelected: (selected) => onSelected(item, selected),
+                );
+              }).toList(),
+            ),
+            if (items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Text(
+                  'No options available',
                   style: TextStyle(
+                    color: Colors.grey[600],
                     fontSize: 13,
-                    color: isSelected ? Colors.blue : Colors.black87,
                   ),
                 ),
-                backgroundColor: Colors.white,
-                selectedColor: Colors.blue.shade100,
-                checkmarkColor: Colors.blue,
-                side: BorderSide(color: Colors.grey.shade300),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                onSelected: (selected) => onSelected(item, selected),
-              );
-            }).toList(),
-          ),
-          if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Text(
-                'No options available',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 13,
-                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -786,182 +800,375 @@ class _FilterPageState extends State<FilterPage> {
     String minLabel,
     String maxLabel,
   ) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextFormField(
-            controller: minController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              labelText: minLabel,
-              labelStyle: TextStyle(color: Colors.grey[700]),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              errorStyle: TextStyle(color: Colors.red[700]),
-              helperText: ' ', // Adds space for error message
-            ),
-            validator: (value) {
-              if (value != null && value.isNotEmpty) {
-                // Check if input is a valid number
-                if (double.tryParse(value) == null) {
-                  return 'Enter a valid number';
-                }
-                
-                // Check if input is non-negative
-                if (double.parse(value) < 0) {
-                  return 'Must be non-negative';
-                }
-                
-                // Check if min is less than max (if max has a value)
-                if (maxController.text.isNotEmpty) {
-                  final double? maxValue = double.tryParse(maxController.text);
-                  if (maxValue != null && double.parse(value) > maxValue) {
-                    return 'Min must be ≤ Max';
+    // Use LayoutBuilder para adaptar-se ao espaço disponível
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Em telas muito pequenas, empilhe os campos verticalmente
+        if (constraints.maxWidth < 400) {
+          return Column(
+            children: [
+              TextFormField(
+                controller: minController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  labelText: minLabel,
+                  labelStyle: TextStyle(color: Colors.grey[700]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  helperText: ' ', // Adds space for error message
+                ),
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    // Check if input is a valid number
+                    if (double.tryParse(value) == null) {
+                      return 'Enter a valid number';
+                    }
+                    
+                    // Check if input is non-negative
+                    if (double.parse(value) < 0) {
+                      return 'Must be non-negative';
+                    }
+                    
+                    // Check if min is less than max (if max has a value)
+                    if (maxController.text.isNotEmpty) {
+                      final double? maxValue = double.tryParse(maxController.text);
+                      if (maxValue != null && double.parse(value) > maxValue) {
+                        return 'Min must be ≤ Max';
+                      }
+                    }
                   }
-                }
-              }
-              return null;
-            },
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: TextFormField(
-            controller: maxController,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              labelText: maxLabel,
-              labelStyle: TextStyle(color: Colors.grey[700]),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+                  return null;
+                },
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              errorStyle: TextStyle(color: Colors.red[700]),
-              helperText: ' ', // Adds space for error message
-            ),
-            validator: (value) {
-              if (value != null && value.isNotEmpty) {
-                // Check if input is a valid number
-                if (double.tryParse(value) == null) {
-                  return 'Enter a valid number';
-                }
-                
-                // Check if input is non-negative
-                if (double.parse(value) < 0) {
-                  return 'Must be non-negative';
-                }
-                
-                // Check if max is greater than min (if min has a value)
-                if (minController.text.isNotEmpty) {
-                  final double? minValue = double.tryParse(minController.text);
-                  if (minValue != null && double.parse(value) < minValue) {
-                    return 'Max must be ≥ Min';
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: maxController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  labelText: maxLabel,
+                  labelStyle: TextStyle(color: Colors.grey[700]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  helperText: ' ', // Adds space for error message
+                ),
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    // Check if input is a valid number
+                    if (double.tryParse(value) == null) {
+                      return 'Enter a valid number';
+                    }
+                    
+                    // Check if input is non-negative
+                    if (double.parse(value) < 0) {
+                      return 'Must be non-negative';
+                    }
+                    
+                    // Check if max is greater than min (if min has a value)
+                    if (minController.text.isNotEmpty) {
+                      final double? minValue = double.tryParse(minController.text);
+                      if (minValue != null && double.parse(value) < minValue) {
+                        return 'Max must be ≥ Min';
+                      }
+                    }
                   }
-                }
-              }
-              return null;
-            },
-          ),
-        ),
-      ],
+                  return null;
+                },
+              ),
+            ],
+          );
+        } else {
+          // Em telas maiores, mantenha o layout horizontal
+          return Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: minController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    labelText: minLabel,
+                    labelStyle: TextStyle(color: Colors.grey[700]),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    helperText: ' ', // Adds space for error message
+                  ),
+                  validator: (value) {
+                    if (value != null && value.isNotEmpty) {
+                      // Check if input is a valid number
+                      if (double.tryParse(value) == null) {
+                        return 'Enter a valid number';
+                      }
+                      
+                      // Check if input is non-negative
+                      if (double.parse(value) < 0) {
+                        return 'Must be non-negative';
+                      }
+                      
+                      // Check if min is less than max (if max has a value)
+                      if (maxController.text.isNotEmpty) {
+                        final double? maxValue = double.tryParse(maxController.text);
+                        if (maxValue != null && double.parse(value) > maxValue) {
+                          return 'Min must be ≤ Max';
+                        }
+                      }
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: maxController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    labelText: maxLabel,
+                    labelStyle: TextStyle(color: Colors.grey[700]),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    helperText: ' ', // Adds space for error message
+                  ),
+                  validator: (value) {
+                    if (value != null && value.isNotEmpty) {
+                      // Check if input is a valid number
+                      if (double.tryParse(value) == null) {
+                        return 'Enter a valid number';
+                      }
+                      
+                      // Check if input is non-negative
+                      if (double.parse(value) < 0) {
+                        return 'Must be non-negative';
+                      }
+                      
+                      // Check if max is greater than min (if min has a value)
+                      if (minController.text.isNotEmpty) {
+                        final double? minValue = double.tryParse(minController.text);
+                        if (minValue != null && double.parse(value) < minValue) {
+                          return 'Max must be ≥ Min';
+                        }
+                      }
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          );
+        }
+      },
     );
   }
 
   Widget _buildDateRangeFields() {
-    return Row(
-      children: [
-        Expanded(
-          child: TextFormField(
-            controller: _startDateController,
-            readOnly: true,
-            onTap: () => _selectStartDate(context),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              labelText: 'From',
-              labelStyle: TextStyle(color: Colors.grey[700]),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              suffixIcon: const Icon(Icons.calendar_today),
-              errorStyle: TextStyle(color: Colors.red[700]),
-              helperText: ' ', // Adds space for error message
-            ),
-            validator: (value) {
-              if (value != null && value.isNotEmpty && _endDateController.text.isNotEmpty) {
-                // Check if start date is before end date
-                final startDate = DateTime.tryParse(value);
-                final endDate = DateTime.tryParse(_endDateController.text);
-                
-                if (startDate != null && endDate != null) {
-                  if (startDate.isAfter(endDate)) {
-                    return 'Start date must be before end date';
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Em telas muito pequenas, empilhe os campos verticalmente
+        if (constraints.maxWidth < 400) {
+          return Column(
+            children: [
+              TextFormField(
+                controller: _startDateController,
+                readOnly: true,
+                onTap: () => _selectStartDate(context),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  labelText: 'From',
+                  labelStyle: TextStyle(color: Colors.grey[700]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  suffixIcon: const Icon(Icons.calendar_today, size: 20),
+                  errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  helperText: ' ', // Adds space for error message
+                ),
+                validator: (value) {
+                  if (value != null && value.isNotEmpty && _endDateController.text.isNotEmpty) {
+                    // Check if start date is before end date
+                    final startDate = DateTime.tryParse(value);
+                    final endDate = DateTime.tryParse(_endDateController.text);
+                    
+                    if (startDate != null && endDate != null) {
+                      if (startDate.isAfter(endDate)) {
+                        return 'Start date must be before end date';
+                      }
+                    }
                   }
-                }
-              }
-              return null;
-            },
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: TextFormField(
-            controller: _endDateController,
-            readOnly: true,
-            onTap: () => _selectEndDate(context),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              labelText: 'To',
-              labelStyle: TextStyle(color: Colors.grey[700]),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+                  return null;
+                },
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              suffixIcon: const Icon(Icons.calendar_today),
-              errorStyle: TextStyle(color: Colors.red[700]),
-              helperText: ' ', // Adds space for error message
-            ),
-            validator: (value) {
-              if (value != null && value.isNotEmpty && _startDateController.text.isNotEmpty) {
-                // Check if end date is after start date
-                final endDate = DateTime.tryParse(value);
-                final startDate = DateTime.tryParse(_startDateController.text);
-                
-                if (startDate != null && endDate != null) {
-                  if (endDate.isBefore(startDate)) {
-                    return 'End date must be after start date';
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _endDateController,
+                readOnly: true,
+                onTap: () => _selectEndDate(context),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white,
+                  labelText: 'To',
+                  labelStyle: TextStyle(color: Colors.grey[700]),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  suffixIcon: const Icon(Icons.calendar_today, size: 20),
+                  errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  helperText: ' ', // Adds space for error message
+                ),
+                validator: (value) {
+                  if (value != null && value.isNotEmpty && _startDateController.text.isNotEmpty) {
+                    // Check if end date is after start date
+                    final endDate = DateTime.tryParse(value);
+                    final startDate = DateTime.tryParse(_startDateController.text);
+                    
+                    if (startDate != null && endDate != null) {
+                      if (endDate.isBefore(startDate)) {
+                        return 'End date must be after start date';
+                      }
+                    }
                   }
-                }
-              }
-              return null;
-            },
-          ),
-        ),
-      ],
+                  return null;
+                },
+              ),
+            ],
+          );
+        } else {
+          // Em telas maiores, mantenha o layout horizontal
+          return Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _startDateController,
+                  readOnly: true,
+                  onTap: () => _selectStartDate(context),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    labelText: 'From',
+                    labelStyle: TextStyle(color: Colors.grey[700]),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    suffixIcon: const Icon(Icons.calendar_today),
+                    errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    helperText: ' ', // Adds space for error message
+                  ),
+                  validator: (value) {
+                    if (value != null && value.isNotEmpty && _endDateController.text.isNotEmpty) {
+                      // Check if start date is before end date
+                      final startDate = DateTime.tryParse(value);
+                      final endDate = DateTime.tryParse(_endDateController.text);
+                      
+                      if (startDate != null && endDate != null) {
+                        if (startDate.isAfter(endDate)) {
+                          return 'Start date must be before end date';
+                        }
+                      }
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  controller: _endDateController,
+                  readOnly: true,
+                  onTap: () => _selectEndDate(context),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    labelText: 'To',
+                    labelStyle: TextStyle(color: Colors.grey[700]),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    suffixIcon: const Icon(Icons.calendar_today),
+                    errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    helperText: ' ', // Adds space for error message
+                  ),
+                  validator: (value) {
+                    if (value != null && value.isNotEmpty && _startDateController.text.isNotEmpty) {
+                      // Check if end date is after start date
+                      final endDate = DateTime.tryParse(value);
+                      final startDate = DateTime.tryParse(_startDateController.text);
+                      
+                      if (startDate != null && endDate != null) {
+                        if (endDate.isBefore(startDate)) {
+                          return 'End date must be after start date';
+                        }
+                      }
+                    }
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          );
+        }
+      },
     );
   }
 
