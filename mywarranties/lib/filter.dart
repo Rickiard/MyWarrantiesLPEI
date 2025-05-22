@@ -454,6 +454,12 @@ class _FilterPageState extends State<FilterPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFAFE1F0),
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+        ),
         title: Row(
           children: [
             const Text('Filter Products'),
