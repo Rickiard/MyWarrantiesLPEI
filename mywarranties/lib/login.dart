@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mywarranties/list.dart';
 import 'package:mywarranties/passwordRecovery.dart';
-import 'loading.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';

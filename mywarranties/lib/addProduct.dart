@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'list.dart';
-import 'package:file_picker/file_picker.dart';
+import 'services/local_file_storage_service.dart';
 
 class AddProductPage extends StatefulWidget {
   @override
@@ -27,9 +25,6 @@ class _AddProductPageState extends State<AddProductPage> {
   final _notesController = TextEditingController();
 
   File? _productImage;
-  File? _receiptFile;
-  File? _warrantyFile;
-  File? _otherDocuments;
   bool _isLoading = false;
   bool _isWarrantyExtensionActivated = false;
 
@@ -40,7 +35,17 @@ class _AddProductPageState extends State<AddProductPage> {
   String _selectedWarrantyUnit = 'days';
   String _selectedExtensionUnit = 'days';
 
-  // Variáveis de URL dos documentos
+  // Storage service
+  final FileStorageService _fileStorage = FileStorageService();
+
+  // File paths and URLs
+  String? _productImagePath;
+  String? _receiptPath;
+  String? _warrantyPath;
+  String? _otherDocsPath;
+  
+  // Remote URLs dos documentos
+  String? _productImageUrl;
   String? _receiptUrl;
   String? _warrantyUrl;
   String? _otherDocsUrl;
@@ -86,49 +91,25 @@ class _AddProductPageState extends State<AddProductPage> {
       controller.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
     }
   }
-
   Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final result = await _fileStorage.pickAndStoreImage(context: context);
     
-    if (image != null) {
+    if (result != null) {
       setState(() {
-        _productImage = File(image.path);
+        _productImage = File(result['localPath']!);
+        _productImagePath = result['localPath'];
+        _productImageUrl = ''; // Empty string as we're not using Firebase Storage
       });
     }
   }
 
-  Future<String?> _pickAndUploadDocument(String folder) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null;
-    final result = await FilePicker.platform.pickFiles(type: FileType.any);
-    if (result != null && result.files.single.path != null) {
-      final file = File(result.files.single.path!);
-      final ext = result.files.single.extension ?? 'file';
-      final storageRef = FirebaseStorage.instance.ref().child('$folder/${user.uid}/${DateTime.now()}.$ext');
-      try {
-        await storageRef.putFile(file);
-        final downloadUrl = await storageRef.getDownloadURL();
-        return downloadUrl;
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 10),
-                Expanded(child: Text('Erro ao fazer upload do documento.')),
-              ],
-            ),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-    return null;
+  Future<Map<String, String>?> _pickAndUploadDocument(String folder) async {
+    final result = await _fileStorage.pickAndStoreDocument(
+      context: context,
+      folder: folder,
+    );
+    
+    return result;
   }
 
   Future<void> _submitForm() async {
@@ -138,15 +119,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) throw Exception('User not logged in');
-
-      // Upload da imagem do produto
-      String? imageUrl;
-      if (_productImage != null) {
-        final storageRef = FirebaseStorage.instance.ref().child('products/${user.uid}/${DateTime.now()}_image.jpg');
-        await storageRef.putFile(_productImage!);
-        imageUrl = await storageRef.getDownloadURL();
-      }
+      if (user == null) throw Exception('User not logged in');      // We'll use the uploaded image URL directly
 
       // Format warranty period
       String warrantyPeriod;
@@ -179,10 +152,16 @@ class _AddProductPageState extends State<AddProductPage> {
         'storeDetails': _storeDetailsController.text,
         'brand': _brandController.text,
         'notes': _notesController.text,
-        'imageUrl': imageUrl,
+        // URLs for remote access
+        'imageUrl': _productImageUrl,
         'receiptUrl': _receiptUrl,
         'warrantyUrl': _warrantyUrl,
         'otherDocumentsUrl': _otherDocsUrl,
+        // Local paths for offline access
+        'imagePath': _productImagePath,
+        'receiptPath': _receiptPath,
+        'warrantyPath': _warrantyPath,
+        'otherDocumentsPath': _otherDocsPath,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -477,9 +456,13 @@ class _AddProductPageState extends State<AddProductPage> {
                   Expanded(child: Text('Receipt')),
                   ElevatedButton(
                     onPressed: () async {
-                      final url = await _pickAndUploadDocument('receipts');
-                      if (url != null) setState(() => _receiptFile = File(''));
-                      _receiptUrl = url;
+                      final result = await _pickAndUploadDocument('receipts');
+                      if (result != null) {
+                        setState(() {
+                          _receiptPath = result['localPath'];
+                          _receiptUrl = result['remoteUrl'];
+                        });
+                      }
                     },
                     child: Text('Upload file'),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
@@ -494,9 +477,13 @@ class _AddProductPageState extends State<AddProductPage> {
                   Expanded(child: Text('Warranty')),
                   ElevatedButton(
                     onPressed: () async {
-                      final url = await _pickAndUploadDocument('warranties');
-                      if (url != null) setState(() => _warrantyFile = File(''));
-                      _warrantyUrl = url;
+                      final result = await _pickAndUploadDocument('warranties');
+                      if (result != null) {
+                        setState(() {
+                          _warrantyPath = result['localPath'];
+                          _warrantyUrl = result['remoteUrl'];
+                        });
+                      }
                     },
                     child: Text('Upload file'),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
@@ -511,9 +498,13 @@ class _AddProductPageState extends State<AddProductPage> {
                   Expanded(child: Text('Other Documents')),
                   ElevatedButton(
                     onPressed: () async {
-                      final url = await _pickAndUploadDocument('documents');
-                      if (url != null) setState(() => _otherDocuments = File(''));
-                      _otherDocsUrl = url;
+                      final result = await _pickAndUploadDocument('documents');
+                      if (result != null) {
+                        setState(() {
+                          _otherDocsPath = result['localPath'];
+                          _otherDocsUrl = result['remoteUrl'];
+                        });
+                      }
                     },
                     child: Text('Upload file'),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.white),

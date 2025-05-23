@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:mywarranties/main.dart' as app;
 import 'package:mywarranties/list.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'notification_settings.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'services/local_file_storage_service.dart';
+import 'dart:io';
 
 // Initialize GoogleSignIn
 final GoogleSignIn _googleSignIn = GoogleSignIn(
@@ -24,11 +23,11 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  
+  final FileStorageService _fileStorage = FileStorageService();  
   bool _isLoading = true;
   String _username = '';
   String _email = '';
-  String _password = '••••••••';
+  // Removed unused password field
   List<Map<String, dynamic>> _accounts = [];
   
   // Controller for adding new account
@@ -898,30 +897,29 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
-
   Future<void> _changeProfilePicture() async {
-    // Use an image picker to select a new profile picture
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    // Use FileStorageService to pick and store the image
+    final result = await _fileStorage.pickAndStoreImage(
+      context: context,
+    );
 
-    if (image != null) {
+    if (result != null) {
       try {
-        // Upload the image to Firebase Storage
-        final storageRef = FirebaseStorage.instance.ref().child('profile_pictures/${_auth.currentUser?.uid}.jpg');
-        await storageRef.putFile(File(image.path));
+        final localPath = result['localPath'];
+        
+        // Update profile photo path (no remote URL in local storage)
+        await _auth.currentUser?.updatePhotoURL(localPath);
 
-        // Get the download URL and update the user's profile
-        final downloadUrl = await storageRef.getDownloadURL();
-        await _auth.currentUser?.updatePhotoURL(downloadUrl);
-
-        // Salvar o URL da foto no Firestore
+        // Save photo data in Firestore
         if (_auth.currentUser?.uid != null) {
           await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
-            'photoURL': downloadUrl,
+            'photoURL': localPath,
+            'photoLocalPath': localPath,
           }, SetOptions(merge: true));
         }
 
         setState(() {}); // Refresh the UI
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -955,16 +953,15 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     }
   }
-
-  // Adicionar método auxiliar para buscar foto do Firestore se não houver no Auth
+  // Helper method to get profile photo path from Firestore if not in Auth
   Future<String?> _getProfilePhotoUrl() async {
     if (_auth.currentUser?.photoURL != null && _auth.currentUser!.photoURL!.isNotEmpty) {
       return _auth.currentUser!.photoURL;
     }
     if (_auth.currentUser?.uid != null) {
       final doc = await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).get();
-      if (doc.exists && doc.data()?['photoURL'] != null) {
-        return doc.data()!['photoURL'] as String;
+      if (doc.exists && doc.data()?['photoLocalPath'] != null) {
+        return doc.data()!['photoLocalPath'] as String;
       }
     }
     return null;
@@ -1007,12 +1004,11 @@ class _ProfilePageState extends State<ProfilePage> {
                           final photoUrl = snapshot.data;
                           return Stack(
                             alignment: Alignment.bottomRight,
-                            children: [
-                              CircleAvatar(
+                            children: [                              CircleAvatar(
                                 radius: 60,
                                 backgroundColor: Colors.white,
                                 backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-                                    ? NetworkImage(photoUrl)
+                                    ? FileImage(File(photoUrl))
                                     : null,
                                 child: (photoUrl == null || photoUrl.isEmpty)
                                     ? Icon(

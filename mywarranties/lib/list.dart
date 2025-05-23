@@ -3,6 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
+import 'dart:io';
 import 'firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login.dart';
@@ -846,8 +849,6 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                         builder: (context) => ProductInfoPage(product: product),
                                       ),
                                     );
-                                    
-                                    // If the product was updated or deleted, refresh the list
                                     if (result == true) {
                                       setState(() {
                                         _isLoading = true;
@@ -871,27 +872,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                           children: [
                                             ClipRRect(
                                               borderRadius: BorderRadius.circular(8),
-                                              child: (product['imageUrl'] != null && (product['imageUrl'] as String).isNotEmpty)
-                                                  ? Image.network(
-                                                      product['imageUrl'],
-                                                      width: 120,
-                                                      height: 120,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder: (context, error, stackTrace) {
-                                                        return Container(
-                                                          width: 120,
-                                                          height: 120,
-                                                          color: Colors.grey[300],
-                                                          child: const Icon(Icons.broken_image, size: 40),
-                                                        );
-                                                      },
-                                                    )
-                                                  : Container(
-                                                      width: 120,
-                                                      height: 120,
-                                                      color: Colors.grey[300],
-                                                      child: const Icon(Icons.image, size: 40, color: Colors.grey),
-                                                    ),
+                                              child: _buildImageWidget(product),
                                             ),
                                             const SizedBox(width: 16),
                                             Expanded(
@@ -955,13 +936,12 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                         ),
                                       ),
                                     ),
-                                  ),
+                                  ), // End GestureDetector
                                 );
-                              },
-                            ),
-            ),
-          ],
-        ),
+                              }, // End ListView.builder
+                            ), // End Expanded
+        )], // End children of Column
+        ), // End Column
         AnimatedPositioned(
           duration: const Duration(milliseconds: 200),
           top: 16,
@@ -1030,5 +1010,50 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
         ),
       ],
     );
+  }  Widget _buildImageWidget(Map<String, dynamic> product) {
+    // Check if we have a local image path
+    final String? localPath = product['imagePath'];
+    
+    // If local path is available and file exists, use it
+    if (localPath != null && localPath.isNotEmpty) {
+      final File localFile = File(localPath);
+      
+      // Return a FutureBuilder to check if file exists
+      return FutureBuilder<bool>(
+        future: localFile.exists(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.done && 
+              snapshot.hasData && 
+              snapshot.data == true) {
+            // Local file exists, use Image.file
+            return Image.file(
+              localFile,
+              width: 120,
+              height: 120,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                // Fall back to remote URL if there's an error
+                return _buildRemoteImageFallback(product);
+              },
+            );
+          } else {
+            // If local file doesn't exist, fall back to remote URL
+            return _buildRemoteImageFallback(product);
+          }
+        },
+      );
+    } else {
+      // No local path, use remote image
+      return _buildRemoteImageFallback(product);
+    }
   }
-}
+    Widget _buildRemoteImageFallback(Map<String, dynamic> product) {
+    // We no longer use remote URLs, so just display a placeholder
+    return Container(
+      width: 120,
+      height: 120,
+        color: Colors.grey.shade300,
+        child: const Icon(Icons.image, size: 40, color: Colors.grey),
+      );
+    }
+} // End of _ListPageState class

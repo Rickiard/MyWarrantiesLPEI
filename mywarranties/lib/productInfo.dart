@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:file_picker/file_picker.dart';
+import 'services/local_file_storage_service.dart';
 
 class ProductInfoPage extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -30,6 +28,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
   final _warrantyUnitController = TextEditingController();
   final _warrantyExtensionUnitController = TextEditingController();
   final List<String> _timeUnits = ['days', 'months', 'years', 'lifetime'];
+  final FileStorageService _fileStorage = FileStorageService();
 
   @override
   void initState() {
@@ -145,32 +144,68 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
     }
   }
 
-  Future<void> _launchUrl(String? url) async {
-    if (url == null || url.isEmpty) return;
+  Future<void> _launchUrl(String? url, {String? localPath}) async {
+    if ((url == null || url.isEmpty) && (localPath == null || localPath.isEmpty)) return;
 
-    try {
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-      } else {
+    // Try to open the local file first if available
+    if (localPath != null && localPath.isNotEmpty) {
+      final localFile = File(localPath);
+      if (await localFile.exists()) {
+        try {
+          // Use the file_storage_service to open the local file
+          await _fileStorage.openFile(context, localPath);
+          return;
+        } catch (e) {
+          print('Error opening local file: $e');
+          // Fall back to remote URL if local file can't be opened
+        }
+      }
+    }
+
+    // Fall back to remote URL
+    if (url != null && url.isNotEmpty) {
+      try {
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.white),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('Could not open the file. Please check if it exists.')),
+                  ],
+                ),
+                backgroundColor: Colors.blue[700],
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            );
+          }
+        }
+      } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
                 children: [
-                  Icon(Icons.info_outline, color: Colors.white),
+                  Icon(Icons.error_outline, color: Colors.white),
                   SizedBox(width: 10),
-                  Expanded(child: Text('Could not open the file. Please check if it exists.')),
+                  Expanded(child: Text('Unable to open the file. The file may be corrupted or inaccessible.')),
                 ],
               ),
-              backgroundColor: Colors.blue[700],
+              backgroundColor: Colors.red[700],
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: Duration(seconds: 3),
             ),
           );
         }
       }
-    } catch (e) {
+    } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -178,7 +213,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
               children: [
                 Icon(Icons.error_outline, color: Colors.white),
                 SizedBox(width: 10),
-                Expanded(child: Text('Unable to open the file. The file may be corrupted or inaccessible.')),
+                Expanded(child: Text('No file available to open.')),
               ],
             ),
             backgroundColor: Colors.red[700],
@@ -192,34 +227,25 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
   }
 
   Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      try {
-        final user = _auth.currentUser;
-        if (user == null) return;
-        final storageRef = FirebaseStorage.instance.ref().child('products/${user.uid}/${DateTime.now()}_image.jpg');
-        await storageRef.putFile(File(pickedFile.path));
-        final downloadUrl = await storageRef.getDownloadURL();
-        setState(() {
-          widget.product['imageUrl'] = downloadUrl;
+    final result = await _fileStorage.pickAndStoreImage(context: context);    if (result != null) {
+      setState(() {
+        widget.product['imageUrl'] = ''; // Empty string as we're not using Firebase Storage
+        widget.product['imagePath'] = result['localPath'];
+      });
+      
+      // Update in Firestore
+      final user = _auth.currentUser;
+      if (user != null) {
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('products')
+            .doc(widget.product['id'])
+            .update({
+          'imageUrl': '', // Empty string as we're not using Firebase Storage
+          'imagePath': result['localPath'],
+          'updatedAt': FieldValue.serverTimestamp(),
         });
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 10),
-                Expanded(child: Text('Erro ao fazer upload da imagem.')),
-              ],
-            ),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: Duration(seconds: 3),
-          ),
-        );
       }
     }
   }
@@ -241,16 +267,34 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
   Future<void> _pickAndUploadDocument(String field) async {
     final user = _auth.currentUser;
     if (user == null) return;
-    final result = await FilePicker.platform.pickFiles(type: FileType.any);
-    if (result != null && result.files.single.path != null) {
-      final file = File(result.files.single.path!);
-      final ext = result.files.single.extension ?? 'file';
-      final storageRef = FirebaseStorage.instance.ref().child('documents/${user.uid}/${DateTime.now()}_$field.$ext');
+    
+    // Determine the folder name based on the field
+    String folderName = 'documents';
+    if (field == 'receiptUrl') folderName = 'receipts';
+    if (field == 'warrantyUrl') folderName = 'warranties';
+      final result = await _fileStorage.pickAndStoreDocument(context: context, folder: folderName);
+    if (result != null) {
+      final localPath = result['localPath'];
+      
+      // Determine the matching local path field
+      String pathField = field.replaceAll('Url', 'Path'); // receiptUrl -> receiptPath
+      
+      setState(() {
+        widget.product[field] = ''; // Empty string as we're not using Firebase Storage
+        widget.product[pathField] = localPath;
+      });
+      
+      // Update in Firestore
       try {
-        await storageRef.putFile(file);
-        final downloadUrl = await storageRef.getDownloadURL();
-        setState(() {
-          widget.product[field] = downloadUrl;
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('products')
+            .doc(widget.product['id'])
+            .update({
+          field: '', // Empty string as we're not using Firebase Storage
+          pathField: localPath,
+          'updatedAt': FieldValue.serverTimestamp(),
         });
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -259,7 +303,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
               children: [
                 Icon(Icons.error_outline, color: Colors.white),
                 SizedBox(width: 10),
-                Expanded(child: Text('Erro ao fazer upload do documento.')),
+                Expanded(child: Text('Error updating document in database.')),
               ],
             ),
             backgroundColor: Colors.red[700],
@@ -394,18 +438,17 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               GestureDetector(
-                onTap: _isEditing ? _pickImage : null,
-                child: Container(
+                onTap: _isEditing ? _pickImage : null,                child: Container(
                   height: 150,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: widget.product['imageUrl'] != null && widget.product['imageUrl'].toString().isNotEmpty
+                  child: widget.product['imagePath'] != null && widget.product['imagePath'].toString().isNotEmpty
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.network(
-                            widget.product['imageUrl'],
+                          child: Image.file(
+                            File(widget.product['imagePath']),
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return const Icon(Icons.image_not_supported, size: 60, color: Colors.grey);
@@ -528,14 +571,19 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                 children: [
                   Expanded(
                     child: InkWell(
-                      onTap: widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty
-                          ? () => _launchUrl(widget.product['receiptUrl'])
+                      onTap: (widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                             (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty)
+                          ? () => _launchUrl(
+                              widget.product['receiptUrl'],
+                              localPath: widget.product['receiptPath'],
+                            )
                           : null,
                       child: Row(
                         children: [
                           Icon(
                             Icons.receipt,
-                            color: widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty
+                            color: (widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                   (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty)
                                 ? Colors.blue
                                 : Colors.grey,
                           ),
@@ -543,10 +591,12 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                           Text(
                             'View Receipt',
                             style: TextStyle(
-                              color: widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty
+                              color: (widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                     (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty)
                                   ? Colors.blue
                                   : Colors.grey,
-                              decoration: widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty
+                              decoration: (widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                          (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty)
                                   ? TextDecoration.underline
                                   : null,
                             ),
@@ -610,14 +660,67 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                 children: [
                   Expanded(
                     child: InkWell(
-                      onTap: widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty
-                          ? () => _launchUrl(widget.product['otherDocumentsUrl'])
+                      onTap: (widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                             (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty)
+                          ? () => _launchUrl(
+                              widget.product['warrantyUrl'],
+                              localPath: widget.product['warrantyPath'],
+                            )
+                          : null,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.verified,
+                            color: (widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                   (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty)
+                                ? Colors.blue
+                                : Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'View Warranty',
+                            style: TextStyle(
+                              color: (widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                     (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty)
+                                  ? Colors.blue
+                                  : Colors.grey,
+                              decoration: (widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                          (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty)
+                                  ? TextDecoration.underline
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: _isEditing
+                        ? () => _pickAndUploadDocument('warrantyUrl')
+                        : null,
+                    child: const Text('Upload'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: (widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                             (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty)
+                          ? () => _launchUrl(
+                              widget.product['otherDocumentsUrl'],
+                              localPath: widget.product['otherDocumentsPath'],
+                            )
                           : null,
                       child: Row(
                         children: [
                           Icon(
                             Icons.folder,
-                            color: widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty
+                            color: (widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                                   (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty)
                                 ? Colors.blue
                                 : Colors.grey,
                           ),
