@@ -485,10 +485,19 @@ class _FilterPageState extends State<FilterPage> {
           child: Form(
             key: _formKey,
             child: LayoutBuilder(
-              builder: (context, constraints) {
-                return Column(
+              builder: (context, constraints) {                return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+              // Product Name Title
+              Text(
+                'Search By Name',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+              SizedBox(height: 8),
               // Product Name
               TextFormField(
                 controller: _nameController,
