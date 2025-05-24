@@ -486,9 +486,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       if (googleUser != null) {
                         try {
                           // Get Google account details
-                          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-
-                          // Create Firebase credential with Google token
+                          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;                          // Create Firebase credential with Google token
                           final AuthCredential credential = GoogleAuthProvider.credential(
                             accessToken: googleAuth.accessToken,
                             idToken: googleAuth.idToken,
@@ -498,7 +496,6 @@ class _ProfilePageState extends State<ProfilePage> {
                           final prefs = await SharedPreferences.getInstance();
                           final currentEmail = _auth.currentUser?.email ?? '';
                           final currentPassword = prefs.getString('userPassword') ?? '';
-                          final currentUid = _auth.currentUser?.uid;
 
                           // Sign out from current account
                           await FirebaseAuth.instance.signOut();
@@ -756,12 +753,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: CircularProgressIndicator(),
                     ),
                   );
-                  
-                  // Save current user credentials
+                    // Save current user credentials
                   final prefs = await SharedPreferences.getInstance();
                   final currentEmail = _auth.currentUser?.email ?? '';
                   final currentPassword = prefs.getString('userPassword') ?? '';
-                  final currentUid = _auth.currentUser?.uid;
                   
                   // Sign out from the current account
                   await FirebaseAuth.instance.signOut();

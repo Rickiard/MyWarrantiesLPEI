@@ -1221,10 +1221,9 @@ class _FilterPageState extends State<FilterPage> {
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Value field
-                  Expanded(
-                    flex: 1,
+                children: [                  // Value field
+                  Flexible(
+                    flex: 2,
                     child: TextFormField(
                       controller: minController,
                       keyboardType: TextInputType.number,
@@ -1241,8 +1240,9 @@ class _FilterPageState extends State<FilterPage> {
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
-                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                        helperText: ' ', // Adds space for error message
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 10),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        isDense: true,
                       ),
                       validator: (value) {
                         // Skip validation if lifetime is selected or field is empty
@@ -1277,9 +1277,8 @@ class _FilterPageState extends State<FilterPage> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // Unit dropdown
-                  Expanded(
+                  const SizedBox(width: 8),                  // Unit dropdown
+                  Flexible(
                     flex: 1,
                     child: _buildUnitDropdown(minUnit, onMinUnitChanged),
                   ),
@@ -1291,10 +1290,9 @@ class _FilterPageState extends State<FilterPage> {
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Value field
-                  Expanded(
-                    flex: 1,
+                children: [                  // Value field
+                  Flexible(
+                    flex: 2,
                     child: TextFormField(
                       controller: maxController,
                       keyboardType: TextInputType.number,
@@ -1311,8 +1309,9 @@ class _FilterPageState extends State<FilterPage> {
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
-                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                        helperText: ' ', // Adds space for error message
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 10),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        isDense: true,
                       ),
                       validator: (value) {
                         // Skip validation if lifetime is selected or field is empty
@@ -1347,9 +1346,8 @@ class _FilterPageState extends State<FilterPage> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // Unit dropdown
-                  Expanded(
+                  const SizedBox(width: 8),                  // Unit dropdown
+                  Flexible(
                     flex: 1,
                     child: _buildUnitDropdown(maxUnit, onMaxUnitChanged),
                   ),

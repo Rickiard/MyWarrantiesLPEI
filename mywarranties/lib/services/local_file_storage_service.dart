@@ -18,12 +18,14 @@ class FileStorageService {
   }
 
   FileStorageService._internal();
-
-  /// Picks an image from the gallery and saves it locally
+  /// Picks an image from the gallery or camera and saves it locally
   /// Returns a map with the local path
   Future<Map<String, String>?> pickAndStoreImage({required BuildContext context}) async {
+    final ImageSource? source = await _showImageSourceDialog(context);
+    if (source == null) return null;
+    
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await picker.pickImage(source: source);
     
     if (image != null) {
       try {
@@ -171,5 +173,46 @@ class FileStorageService {
       default:
         return Icons.insert_drive_file;
     }
+  }
+
+  /// Shows a dialog to let user choose between camera and gallery
+  Future<ImageSource?> _showImageSourceDialog(BuildContext context) async {
+    return await showDialog<ImageSource>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Select Image Source'),
+          content: Text('Choose how you want to add the image:'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.camera),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.camera_alt),
+                  SizedBox(width: 8),
+                  Text('Camera'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.gallery),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library),
+                  SizedBox(width: 8),
+                  Text('Gallery'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

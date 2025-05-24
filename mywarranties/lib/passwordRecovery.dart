@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mywarranties/login.dart';
-import 'dart:math';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 void main() async{
@@ -31,14 +28,6 @@ class PasswordRecoveryScreen extends StatefulWidget {
 
 class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  bool _isPasswordVisible = false;
-
-  void _togglePasswordVisibility() {
-    setState(() {
-      _isPasswordVisible = !_isPasswordVisible;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -190,7 +179,7 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                         ),
                       ),
                       child: Text(
-                        'Send Verify Code',
+                        'Confirm',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,

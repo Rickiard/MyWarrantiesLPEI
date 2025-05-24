@@ -270,8 +270,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class WelcomeScreen extends StatelessWidget {
-  // Função para lidar com o login do Google
+class WelcomeScreen extends StatelessWidget {  // Função para lidar com o login do Google
   Future<void> _handleGoogleSignIn(BuildContext context) async {
     try {
       // Show loading indicator
@@ -283,11 +282,19 @@ class WelcomeScreen extends StatelessWidget {
         ),
       );
 
+      // Check if Google Play Services is available
+      print('Starting Google Sign-In process...');
+      
+      // Clear any existing sign-in state
+      await _googleSignIn.signOut();
+      
       // Inicia o processo de login com o Google
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      print('Google Sign-In result: ${googleUser != null ? 'Success' : 'Cancelled or failed'}');
 
       if (googleUser != null) {
         try {
+          print('Getting authentication details for: ${googleUser.email}');
           // Obtenha os detalhes da conta do Google
           final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
