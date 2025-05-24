@@ -6,11 +6,13 @@ import 'package:mywarranties/list.dart';
 class FilterPage extends StatefulWidget {
   final Function(Map<String, String>) onApplyFilters;
   final Map<String, String>? activeFilters; // Para receber os filtros ativos
+  final VoidCallback? onBackPressed; // Callback para lidar com o botão de voltar
 
   const FilterPage({
     Key? key, 
     required this.onApplyFilters, 
     this.activeFilters,
+    this.onBackPressed,
   }) : super(key: key);
 
   @override
@@ -452,12 +454,16 @@ class _FilterPageState extends State<FilterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFAFE1F0),
-      appBar: AppBar(
+      backgroundColor: const Color(0xFFAFE1F0),      appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            Navigator.of(context).pop();
+            // Use the provided callback if available, otherwise fall back to Navigator.pop()
+            if (widget.onBackPressed != null) {
+              widget.onBackPressed!();
+            } else {
+              Navigator.of(context).pop();
+            }
           },
         ),
         title: Row(
@@ -1177,7 +1183,6 @@ class _FilterPageState extends State<FilterPage> {
       },
     );
   }
-
   Widget _buildWarrantyRangeFields(
     TextEditingController minController,
     TextEditingController maxController,
@@ -1186,175 +1191,158 @@ class _FilterPageState extends State<FilterPage> {
     void Function(String?) onMinUnitChanged,
     void Function(String?) onMaxUnitChanged,
   ) {
-    return Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use vertical layout on smaller screens to prevent overflow
+        bool useVerticalLayout = constraints.maxWidth < 600;
+        
+        if (useVerticalLayout) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Minimum section
+              Text(
+                'Minimum',
+                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              _buildRangeInputRow(minController, minUnit, onMinUnitChanged, 'Min', maxController, maxUnit),
+              const SizedBox(height: 16),
+              
+              // Maximum section
+              Text(
+                'Maximum',
+                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              _buildRangeInputRow(maxController, maxUnit, onMaxUnitChanged, 'Max', minController, minUnit),
+            ],
+          );
+        } else {
+          // Use horizontal layout on larger screens
+          return Column(
+            children: [
+              // Header row with labels
+              Row(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
+                      child: Text(
+                        'Minimum',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8.0),
+                      child: Text(
+                        'Maximum',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Input fields row
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Minimum value and unit
+                  Expanded(
+                    child: _buildRangeInputRow(minController, minUnit, onMinUnitChanged, 'Min', maxController, maxUnit),
+                  ),
+                  const SizedBox(width: 16),
+                  // Maximum value and unit
+                  Expanded(
+                    child: _buildRangeInputRow(maxController, maxUnit, onMaxUnitChanged, 'Max', minController, minUnit),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildRangeInputRow(
+    TextEditingController controller,
+    String unit,
+    void Function(String?) onUnitChanged,
+    String validationType,
+    TextEditingController otherController,
+    String otherUnit,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header row with labels
-        Row(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8.0),
-                child: Text(
-                  'Minimum',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
+        // Value field
+        Expanded(
+          flex: 3,
+          child: TextFormField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.white,
+              labelText: 'Value',
+              labelStyle: TextStyle(color: Colors.grey[700], fontSize: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey.shade300),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8.0),
-                child: Text(
-                  'Maximum',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.grey.shade300),
               ),
+              errorStyle: TextStyle(color: Colors.red[700], fontSize: 10),
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              isDense: true,
             ),
-          ],
+            validator: (value) {
+              // Skip validation if lifetime is selected or field is empty
+              if (unit == 'lifetime' || (value == null || value.isEmpty)) {
+                return null;
+              }
+              
+              // Check if input is a valid integer
+              if (int.tryParse(value) == null) {
+                return 'Valid number required';
+              }
+              
+              // Check if input is positive
+              if (int.parse(value) <= 0) {
+                return 'Must be positive';
+              }
+              
+              // Check min/max relationship
+              if (otherController.text.isNotEmpty && otherUnit != 'lifetime') {
+                final int? otherValue = int.tryParse(otherController.text);
+                if (otherValue != null) {
+                  // Convert both values to the same unit for comparison
+                  int currentValueInDays = _convertToDays(int.parse(value), unit);
+                  int otherValueInDays = _convertToDays(otherValue, otherUnit);
+                  
+                  if (validationType == 'Min' && currentValueInDays > otherValueInDays) {
+                    return 'Min > Max';
+                  } else if (validationType == 'Max' && currentValueInDays < otherValueInDays) {
+                    return 'Max < Min';
+                  }
+                }
+              }
+              return null;
+            },
+          ),
         ),
-        const SizedBox(height: 8),
-        // Input fields row
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Minimum value and unit
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [                  // Value field
-                  Flexible(
-                    flex: 2,
-                    child: TextFormField(
-                      controller: minController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        labelText: 'Value',
-                        labelStyle: TextStyle(color: Colors.grey[700]),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 10),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        isDense: true,
-                      ),
-                      validator: (value) {
-                        // Skip validation if lifetime is selected or field is empty
-                        if (minUnit == 'lifetime' || (value == null || value.isEmpty)) {
-                          return null;
-                        }
-                        
-                        // Check if input is a valid integer
-                        if (int.tryParse(value) == null) {
-                          return 'Enter a valid number';
-                        }
-                        
-                        // Check if input is positive
-                        if (int.parse(value) <= 0) {
-                          return 'Must be positive';
-                        }
-                        
-                        // Check if min is less than max (if max has a value and not lifetime)
-                        if (maxController.text.isNotEmpty && maxUnit != 'lifetime') {
-                          final int? maxValue = int.tryParse(maxController.text);
-                          if (maxValue != null) {
-                            // Convert both values to the same unit for comparison
-                            int minValueInDays = _convertToDays(int.parse(value), minUnit);
-                            int maxValueInDays = _convertToDays(maxValue, maxUnit);
-                            
-                            if (minValueInDays > maxValueInDays) {
-                              return 'Min > Max';
-                            }
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),                  // Unit dropdown
-                  Flexible(
-                    flex: 1,
-                    child: _buildUnitDropdown(minUnit, onMinUnitChanged),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Maximum value and unit
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [                  // Value field
-                  Flexible(
-                    flex: 2,
-                    child: TextFormField(
-                      controller: maxController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        labelText: 'Value',
-                        labelStyle: TextStyle(color: Colors.grey[700]),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 10),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        isDense: true,
-                      ),
-                      validator: (value) {
-                        // Skip validation if lifetime is selected or field is empty
-                        if (maxUnit == 'lifetime' || (value == null || value.isEmpty)) {
-                          return null;
-                        }
-                        
-                        // Check if input is a valid integer
-                        if (int.tryParse(value) == null) {
-                          return 'Enter a valid number';
-                        }
-                        
-                        // Check if input is positive
-                        if (int.parse(value) <= 0) {
-                          return 'Must be positive';
-                        }
-                        
-                        // Check if max is greater than min (if min has a value and not lifetime)
-                        if (minController.text.isNotEmpty && minUnit != 'lifetime') {
-                          final int? minValue = int.tryParse(minController.text);
-                          if (minValue != null) {
-                            // Convert both values to the same unit for comparison
-                            int maxValueInDays = _convertToDays(int.parse(value), maxUnit);
-                            int minValueInDays = _convertToDays(minValue, minUnit);
-                            
-                            if (maxValueInDays < minValueInDays) {
-                              return 'Max < Min';
-                            }
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),                  // Unit dropdown
-                  Flexible(
-                    flex: 1,
-                    child: _buildUnitDropdown(maxUnit, onMaxUnitChanged),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        const SizedBox(width: 8),
+        // Unit dropdown
+        Expanded(
+          flex: 2,
+          child: _buildUnitDropdown(unit, onUnitChanged),
         ),
       ],
     );
@@ -1436,14 +1424,17 @@ class _FilterPageState extends State<FilterPage> {
         return value;
     }
   }
-
   Widget _buildUnitDropdown(String value, void Function(String?) onChanged) {
     return DropdownButtonFormField<String>(
       value: value,
       items: _timeUnits.map((unit) {
         return DropdownMenuItem(
           value: unit,
-          child: Text(unit.substring(0, 1).toUpperCase() + unit.substring(1)),
+          child: Text(
+            unit.substring(0, 1).toUpperCase() + unit.substring(1),
+            style: TextStyle(fontSize: 12),
+            overflow: TextOverflow.ellipsis,
+          ),
         );
       }).toList(),
       decoration: InputDecoration(
@@ -1457,8 +1448,12 @@ class _FilterPageState extends State<FilterPage> {
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: Colors.grey.shade300),
         ),
+        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        isDense: true,
       ),
+      style: TextStyle(fontSize: 12, color: Colors.black87),
       onChanged: onChanged,
+      isExpanded: true, // Prevents overflow by expanding to available width
     );
   }
 

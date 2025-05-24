@@ -6,7 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as path;
-import 'package:url_launcher/url_launcher.dart';
+import 'package:open_filex/open_filex.dart';
 
 class FileStorageService {
   static final FileStorageService _instance = FileStorageService._internal();
@@ -97,17 +97,31 @@ class FileStorageService {
     }
     return null;
   }
-  
-  /// Opens a file from local storage
+  /// Opens a file from local storage using the best available method
   Future<void> openFile(BuildContext context, String localPath) async {
     try {
       final File file = File(localPath);
       if (await file.exists()) {
-        final uri = Uri.file(localPath);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri);
-        } else {
-          _showErrorSnackbar(context, 'Could not open the file. No suitable app found to open this file type.');
+        // Use open_filex for better file opening support
+        final result = await OpenFilex.open(localPath);
+        
+        // Check the result and show appropriate messages
+        switch (result.type) {
+          case ResultType.done:
+            // File opened successfully - no need to show a message
+            break;
+          case ResultType.noAppToOpen:
+            _showErrorSnackbar(context, 'No app found to open this file type. Please install a suitable app.');
+            break;
+          case ResultType.fileNotFound:
+            _showErrorSnackbar(context, 'File not found. It may have been deleted or moved.');
+            break;
+          case ResultType.permissionDenied:
+            _showErrorSnackbar(context, 'Permission denied. Please check file permissions.');
+            break;
+          case ResultType.error:
+            _showErrorSnackbar(context, 'Could not open the file. ${result.message}');
+            break;
         }
       } else {
         _showErrorSnackbar(context, 'File not found. It may have been deleted or moved.');

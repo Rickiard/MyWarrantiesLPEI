@@ -737,14 +737,17 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
 
   Widget _buildCurrentView() {
     if (_currentIndex == 1) {
-      return StatisticsPage();
-    } else if (_currentIndex == 2) {
+      return StatisticsPage();    } else if (_currentIndex == 2) {
       return FilterPage(
         onApplyFilters: (filters) {
           _handleFilters(filters);
           setState(() => _currentIndex = 0); // Return to list view after applying filters
         },
         activeFilters: _activeFilters,
+        onBackPressed: () {
+          // Handle back button to return to the previous tab (list view)
+          setState(() => _currentIndex = 0);
+        },
       );
     } else if (_currentIndex == 3) {
       return ProfilePage();

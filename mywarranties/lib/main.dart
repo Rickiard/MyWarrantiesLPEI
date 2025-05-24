@@ -17,6 +17,10 @@ import 'package:uuid/uuid.dart';
 // Inicialize o GoogleSignIn
 final GoogleSignIn _googleSignIn = GoogleSignIn(
   clientId: '598622253789-1oljk3c82dcqorbofvvb2otn12bkkp9s.apps.googleusercontent.com',
+  scopes: [
+    'email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+  ],
 );
 
 void main() async {
@@ -288,6 +292,10 @@ class WelcomeScreen extends StatelessWidget {  // Função para lidar com o logi
       // Clear any existing sign-in state
       await _googleSignIn.signOut();
       
+      // Check if Google Play Services is available
+      final bool isAvailable = await _googleSignIn.isSignedIn();
+      print('Google Sign-In available: $isAvailable');
+      
       // Inicia o processo de login com o Google
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       print('Google Sign-In result: ${googleUser != null ? 'Success' : 'Cancelled or failed'}');
@@ -297,6 +305,11 @@ class WelcomeScreen extends StatelessWidget {  // Função para lidar com o logi
           print('Getting authentication details for: ${googleUser.email}');
           // Obtenha os detalhes da conta do Google
           final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+          // Check if tokens are valid
+          if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+            throw Exception('Failed to obtain valid Google authentication tokens');
+          }
 
           // Crie uma credencial do Firebase com o token do Google
           final AuthCredential credential = GoogleAuthProvider.credential(

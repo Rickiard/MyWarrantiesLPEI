@@ -28,17 +28,17 @@ class PasswordRecoveryScreen extends StatefulWidget {
 
 class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
   final TextEditingController _emailController = TextEditingController();
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Color(0xFFADD8E6), // Azul bebê claro
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center, // Centraliza verticalmente
-            crossAxisAlignment: CrossAxisAlignment.center, // Centraliza horizontalmente
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center, // Centraliza verticalmente
+              crossAxisAlignment: CrossAxisAlignment.center, // Centraliza horizontalmente
             children: [
               // Ícone de voltar
               Align(
@@ -187,10 +187,10 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                       ),
                     ),
                   ],
-                ),
-              ),
+                ),                ),
             ],
           ),
+        ),
         ),
       ),
     );

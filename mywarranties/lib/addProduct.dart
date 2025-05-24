@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
+import 'package:path/path.dart' as path;
 import 'list.dart';
 import 'services/local_file_storage_service.dart';
 
@@ -37,7 +38,6 @@ class _AddProductPageState extends State<AddProductPage> {
 
   // Storage service
   final FileStorageService _fileStorage = FileStorageService();
-
   // File paths and URLs
   String? _productImagePath;
   String? _receiptPath;
@@ -49,6 +49,11 @@ class _AddProductPageState extends State<AddProductPage> {
   String? _receiptUrl;
   String? _warrantyUrl;
   String? _otherDocsUrl;
+
+  // File names for display
+  String? _receiptFileName;
+  String? _warrantyFileName;
+  String? _otherDocsFileName;
 
   @override
   void initState() {
@@ -90,8 +95,7 @@ class _AddProductPageState extends State<AddProductPage> {
     if (picked != null) {
       controller.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
     }
-  }
-  Future<void> _pickImage() async {
+  }  Future<void> _pickImage() async {
     final result = await _fileStorage.pickAndStoreImage(context: context);
     
     if (result != null) {
@@ -100,6 +104,15 @@ class _AddProductPageState extends State<AddProductPage> {
         _productImagePath = result['localPath'];
         _productImageUrl = ''; // Empty string as we're not using Firebase Storage
       });
+      
+      // Show success feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Product image uploaded successfully!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -321,8 +334,7 @@ class _AddProductPageState extends State<AddProductPage> {
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Add Photo
+            children: [              // Add Photo
               GestureDetector(
                 onTap: _pickImage,
                 child: Container(
@@ -330,17 +342,57 @@ class _AddProductPageState extends State<AddProductPage> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _productImage != null ? Colors.green : Colors.grey.shade300,
+                      width: 2,
+                    ),
                   ),
                   child: _productImage != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.file(_productImage!, fit: BoxFit.cover),
+                      ? Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(_productImage!, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                padding: EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.check, color: Colors.white, size: 16),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 8,
+                              left: 8,
+                              right: 8,
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'Tap to change image',
+                                  style: TextStyle(color: Colors.white, fontSize: 12),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ],
                         )
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.upload, size: 40, color: Colors.grey),
-                            Text('Add Photo', style: TextStyle(color: Colors.grey)),
+                            Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
+                            SizedBox(height: 8),
+                            Text('Add Product Photo', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+                            SizedBox(height: 4),
+                            Text('Tap to upload', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                           ],
                         ),
                 ),
@@ -448,68 +500,208 @@ class _AddProductPageState extends State<AddProductPage> {
 
               // Upload Documents Section
               Text('Upload Documents', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              SizedBox(height: 16),
-
-              // Receipt Upload
-              Row(
-                children: [
-                  Expanded(child: Text('Receipt')),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final result = await _pickAndUploadDocument('receipts');
-                      if (result != null) {
-                        setState(() {
-                          _receiptPath = result['localPath'];
-                          _receiptUrl = result['remoteUrl'];
-                        });
-                      }
-                    },
-                    child: Text('Upload file'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
-                  ),
-                ],
-              ),
-              SizedBox(height: 8),
+              SizedBox(height: 16),              // Receipt Upload
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _receiptPath != null ? Colors.green : Colors.grey.shade300),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _receiptPath != null ? Icons.check_circle : Icons.receipt,
+                          color: _receiptPath != null ? Colors.green : Colors.grey,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Receipt',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: _receiptPath != null ? Colors.green.shade700 : Colors.black,
+                            ),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () async {
+                            final result = await _pickAndUploadDocument('receipts');
+                            if (result != null) {
+                              setState(() {
+                                _receiptPath = result['localPath'];
+                                _receiptUrl = result['remoteUrl'];
+                                _receiptFileName = path.basename(result['localPath']!);
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Receipt uploaded successfully!'),
+                                  backgroundColor: Colors.green,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                          child: Text(_receiptPath != null ? 'Change file' : 'Upload file'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _receiptPath != null ? Colors.green.shade50 : Colors.white,
+                            foregroundColor: _receiptPath != null ? Colors.green.shade700 : Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_receiptFileName != null) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'File: $_receiptFileName',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),              SizedBox(height: 16),
 
               // Warranty Upload
-              Row(
-                children: [
-                  Expanded(child: Text('Warranty')),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final result = await _pickAndUploadDocument('warranties');
-                      if (result != null) {
-                        setState(() {
-                          _warrantyPath = result['localPath'];
-                          _warrantyUrl = result['remoteUrl'];
-                        });
-                      }
-                    },
-                    child: Text('Upload file'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
-                  ),
-                ],
-              ),
-              SizedBox(height: 8),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _warrantyPath != null ? Colors.green : Colors.grey.shade300),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _warrantyPath != null ? Icons.check_circle : Icons.verified_user,
+                          color: _warrantyPath != null ? Colors.green : Colors.grey,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Warranty',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: _warrantyPath != null ? Colors.green.shade700 : Colors.black,
+                            ),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () async {
+                            final result = await _pickAndUploadDocument('warranties');
+                            if (result != null) {
+                              setState(() {
+                                _warrantyPath = result['localPath'];
+                                _warrantyUrl = result['remoteUrl'];
+                                _warrantyFileName = path.basename(result['localPath']!);
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Warranty document uploaded successfully!'),
+                                  backgroundColor: Colors.green,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                          child: Text(_warrantyPath != null ? 'Change file' : 'Upload file'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _warrantyPath != null ? Colors.green.shade50 : Colors.white,
+                            foregroundColor: _warrantyPath != null ? Colors.green.shade700 : Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_warrantyFileName != null) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'File: $_warrantyFileName',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),              SizedBox(height: 16),
 
               // Other Documents Upload
-              Row(
-                children: [
-                  Expanded(child: Text('Other Documents')),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final result = await _pickAndUploadDocument('documents');
-                      if (result != null) {
-                        setState(() {
-                          _otherDocsPath = result['localPath'];
-                          _otherDocsUrl = result['remoteUrl'];
-                        });
-                      }
-                    },
-                    child: Text('Upload file'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
-                  ),
-                ],
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _otherDocsPath != null ? Colors.green : Colors.grey.shade300),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _otherDocsPath != null ? Icons.check_circle : Icons.description,
+                          color: _otherDocsPath != null ? Colors.green : Colors.grey,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Other Documents',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,
+                              color: _otherDocsPath != null ? Colors.green.shade700 : Colors.black,
+                            ),
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () async {
+                            final result = await _pickAndUploadDocument('documents');
+                            if (result != null) {
+                              setState(() {
+                                _otherDocsPath = result['localPath'];
+                                _otherDocsUrl = result['remoteUrl'];
+                                _otherDocsFileName = path.basename(result['localPath']!);
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Document uploaded successfully!'),
+                                  backgroundColor: Colors.green,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                          child: Text(_otherDocsPath != null ? 'Change file' : 'Upload file'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _otherDocsPath != null ? Colors.green.shade50 : Colors.white,
+                            foregroundColor: _otherDocsPath != null ? Colors.green.shade700 : Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_otherDocsFileName != null) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'File: $_otherDocsFileName',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               SizedBox(height: 24),
 

@@ -86,12 +86,12 @@ class _LoginScreenState extends State<LoginScreen> {
       // Continue with login even if notification fails
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Color(0xFFADD8E6), // Azul bebê claro
-      body: SingleChildScrollView(
+      body: SafeArea(
+        child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
@@ -407,10 +407,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ],
-                ),
-              ),
+                ),                ),
             ],
           ),
+        ),
         ),
       ),
     );

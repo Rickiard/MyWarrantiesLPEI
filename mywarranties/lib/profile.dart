@@ -12,6 +12,10 @@ import 'dart:io';
 // Initialize GoogleSignIn
 final GoogleSignIn _googleSignIn = GoogleSignIn(
   clientId: '598622253789-1oljk3c82dcqorbofvvb2otn12bkkp9s.apps.googleusercontent.com',
+  scopes: [
+    'email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+  ],
 );
 
 class ProfilePage extends StatefulWidget {

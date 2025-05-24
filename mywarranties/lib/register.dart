@@ -39,18 +39,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _repeatPasswordController = TextEditingController(); 
   bool _isPasswordVisible = false;
   bool _isRepeatPasswordVisible = false;
-
   @override
 Widget build(BuildContext context) {
   return Scaffold(
     backgroundColor: Color(0xFFADD8E6), // Azul bebê claro
-    body: SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center, // Centraliza verticalmente
-          crossAxisAlignment: CrossAxisAlignment.center, // Centraliza horizontalmente
-          children: [
+    body: SafeArea(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center, // Centraliza verticalmente
+            crossAxisAlignment: CrossAxisAlignment.center, // Centraliza horizontalmente
+            children: [
               // Ícone de voltar
               Align(
                 alignment: Alignment.topLeft,
@@ -327,11 +327,11 @@ Widget build(BuildContext context) {
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ],                ),
               ),
             ],
           ),
+        ),
         ),
       ),
     );
