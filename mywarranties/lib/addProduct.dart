@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 import 'list.dart';
 import 'services/local_file_storage_service.dart';
 
@@ -92,27 +95,93 @@ class _AddProductPageState extends State<AddProductPage> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) {
-      controller.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+    if (picked != null) {      controller.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
     }
-  }  Future<void> _pickImage() async {
-    final result = await _fileStorage.pickAndStoreImage(context: context);
-    
-    if (result != null) {
-      setState(() {
-        _productImage = File(result['localPath']!);
-        _productImagePath = result['localPath'];
-        _productImageUrl = ''; // Empty string as we're not using Firebase Storage
-      });
+  }
+  Future<void> _showImageSourceDialog() async {
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Select Image Source'),
+          content: Text('Choose how you want to add the image:'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.camera),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.camera_alt),
+                  SizedBox(width: 8),
+                  Text('Camera'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.gallery),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library),
+                  SizedBox(width: 8),
+                  Text('Gallery'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+    if (source != null) {
+      await _pickImage(source);
+    }
+  }
+  Future<void> _pickImage([ImageSource? source]) async {
+    if (source != null) {
+      // Direct camera/gallery access
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: source);
       
-      // Show success feedback
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Product image uploaded successfully!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      if (image != null) {
+        setState(() {
+          _productImage = File(image.path);
+          _productImagePath = image.path;
+          _productImageUrl = ''; // Empty string as we're not using Firebase Storage
+        });
+        
+        // Show success feedback
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Product image uploaded successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      // Fallback to file storage service for backward compatibility
+      final result = await _fileStorage.pickAndStoreImage(context: context);
+      
+      if (result != null) {
+        setState(() {
+          _productImage = File(result['localPath']!);
+          _productImagePath = result['localPath'];
+          _productImageUrl = ''; // Empty string as we're not using Firebase Storage
+        });
+        
+        // Show success feedback
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Product image uploaded successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -336,49 +405,69 @@ class _AddProductPageState extends State<AddProductPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [              // Add Photo
               GestureDetector(
-                onTap: _pickImage,
+                onTap: () => _showImageSourceDialog(),
                 child: Container(
-                  height: 150,
+                  height: 160,
+                  margin: EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: _productImage != null ? Colors.green : Colors.grey.shade300,
                       width: 2,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 6,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: _productImage != null
                       ? Stack(
                           children: [
                             ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(_productImage!, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
-                            ),
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                padding: EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Colors.green,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(Icons.check, color: Colors.white, size: 16),
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.file(
+                                _productImage!, 
+                                fit: BoxFit.cover, 
+                                width: double.infinity, 
+                                height: double.infinity
                               ),
                             ),
                             Positioned(
-                              bottom: 8,
-                              left: 8,
-                              right: 8,
+                              top: 12,
+                              right: 12,
                               child: Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: EdgeInsets.all(6),
                                 decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(4),
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(Icons.check, color: Colors.white, size: 18),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 12,
+                              left: 12,
+                              right: 12,
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
                                   'Tap to change image',
-                                  style: TextStyle(color: Colors.white, fontSize: 12),
+                                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
                                   textAlign: TextAlign.center,
                                 ),
                               ),
@@ -388,16 +477,29 @@ class _AddProductPageState extends State<AddProductPage> {
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_a_photo, size: 40, color: Colors.grey),
-                            SizedBox(height: 8),
-                            Text('Add Product Photo', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
-                            SizedBox(height: 4),
-                            Text('Tap to upload', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                            Icon(Icons.add_a_photo, size: 48, color: Colors.grey.shade600),
+                            SizedBox(height: 12),
+                            Text(
+                              'Add Product Photo', 
+                              style: TextStyle(
+                                color: Colors.grey.shade700, 
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16
+                              )
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Tap to upload from camera or gallery', 
+                              style: TextStyle(
+                                color: Colors.grey.shade500, 
+                                fontSize: 12
+                              )
+                            ),
                           ],
                         ),
                 ),
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 20),
 
               // Text Fields
               TextFormField(
@@ -526,24 +628,24 @@ class _AddProductPageState extends State<AddProductPage> {
                               color: _receiptPath != null ? Colors.green.shade700 : Colors.black,
                             ),
                           ),
-                        ),
-                        ElevatedButton(
+                        ),                        ElevatedButton(
                           onPressed: () async {
-                            final result = await _pickAndUploadDocument('receipts');
-                            if (result != null) {
-                              setState(() {
-                                _receiptPath = result['localPath'];
-                                _receiptUrl = result['remoteUrl'];
-                                _receiptFileName = path.basename(result['localPath']!);
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Receipt uploaded successfully!'),
-                                  backgroundColor: Colors.green,
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            }
+                            _showDocumentSourceDialog('receipts', (result) {
+                              if (result != null) {
+                                setState(() {
+                                  _receiptPath = result['localPath'];
+                                  _receiptUrl = result['remoteUrl'];
+                                  _receiptFileName = path.basename(result['localPath']!);
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Receipt uploaded successfully!'),
+                                    backgroundColor: Colors.green,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            });
                           },
                           child: Text(_receiptPath != null ? 'Change file' : 'Upload file'),
                           style: ElevatedButton.styleFrom(
@@ -594,24 +696,24 @@ class _AddProductPageState extends State<AddProductPage> {
                               color: _warrantyPath != null ? Colors.green.shade700 : Colors.black,
                             ),
                           ),
-                        ),
-                        ElevatedButton(
+                        ),                        ElevatedButton(
                           onPressed: () async {
-                            final result = await _pickAndUploadDocument('warranties');
-                            if (result != null) {
-                              setState(() {
-                                _warrantyPath = result['localPath'];
-                                _warrantyUrl = result['remoteUrl'];
-                                _warrantyFileName = path.basename(result['localPath']!);
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Warranty document uploaded successfully!'),
-                                  backgroundColor: Colors.green,
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            }
+                            _showDocumentSourceDialog('warranties', (result) {
+                              if (result != null) {
+                                setState(() {
+                                  _warrantyPath = result['localPath'];
+                                  _warrantyUrl = result['remoteUrl'];
+                                  _warrantyFileName = path.basename(result['localPath']!);
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Warranty document uploaded successfully!'),
+                                    backgroundColor: Colors.green,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            });
                           },
                           child: Text(_warrantyPath != null ? 'Change file' : 'Upload file'),
                           style: ElevatedButton.styleFrom(
@@ -662,24 +764,24 @@ class _AddProductPageState extends State<AddProductPage> {
                               color: _otherDocsPath != null ? Colors.green.shade700 : Colors.black,
                             ),
                           ),
-                        ),
-                        ElevatedButton(
+                        ),                        ElevatedButton(
                           onPressed: () async {
-                            final result = await _pickAndUploadDocument('documents');
-                            if (result != null) {
-                              setState(() {
-                                _otherDocsPath = result['localPath'];
-                                _otherDocsUrl = result['remoteUrl'];
-                                _otherDocsFileName = path.basename(result['localPath']!);
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Document uploaded successfully!'),
-                                  backgroundColor: Colors.green,
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            }
+                            _showDocumentSourceDialog('documents', (result) {
+                              if (result != null) {
+                                setState(() {
+                                  _otherDocsPath = result['localPath'];
+                                  _otherDocsUrl = result['remoteUrl'];
+                                  _otherDocsFileName = path.basename(result['localPath']!);
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Document uploaded successfully!'),
+                                    backgroundColor: Colors.green,
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            });
                           },
                           child: Text(_otherDocsPath != null ? 'Change file' : 'Upload file'),
                           style: ElevatedButton.styleFrom(
@@ -740,5 +842,98 @@ class _AddProductPageState extends State<AddProductPage> {
     _brandController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+  Future<void> _showDocumentSourceDialog(String folder, Function(Map<String, String>?) onResult) async {
+    final source = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Select Document Source'),
+          content: Text('Choose how you want to add the document:'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('camera'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.camera_alt),
+                  SizedBox(width: 8),
+                  Text('Camera'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('gallery'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library),
+                  SizedBox(width: 8),
+                  Text('Gallery'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('files'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.insert_drive_file),
+                  SizedBox(width: 8),
+                  Text('Files'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+    
+    if (source != null) {
+      Map<String, String>? result;
+      if (source == 'camera' || source == 'gallery') {
+        result = await _pickImageAsDocument(folder, source == 'camera' ? ImageSource.camera : ImageSource.gallery);
+      } else if (source == 'files') {
+        result = await _pickAndUploadDocument(folder);
+      }
+      onResult(result);
+    }
+  }
+
+  Future<Map<String, String>?> _pickImageAsDocument(String folder, ImageSource source) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: source);
+    
+    if (image != null) {
+      try {
+        final Directory appDir = await getApplicationDocumentsDirectory();
+        final String localDirPath = '${appDir.path}/$folder';
+        
+        final Directory localDir = Directory(localDirPath);
+        if (!await localDir.exists()) {
+          await localDir.create(recursive: true);
+        }
+        
+        final String fileName = '${const Uuid().v4()}${path.extension(image.path)}';
+        final String localPath = '$localDirPath/$fileName';
+        
+        final File localFile = File(localPath);
+        await localFile.writeAsBytes(await image.readAsBytes());
+        
+        return {
+          'localPath': localPath,
+          'remoteUrl': '',
+        };
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving image: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+    return null;
   }
 }

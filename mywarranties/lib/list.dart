@@ -1029,15 +1029,32 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
               snapshot.hasData && 
               snapshot.data == true) {
             // Local file exists, use Image.file
-            return Image.file(
-              localFile,
+            return Container(
               width: 120,
               height: 120,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                // Fall back to remote URL if there's an error
-                return _buildRemoteImageFallback(product);
-              },
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(
+                  localFile,
+                  width: 120,
+                  height: 120,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    // Fall back to remote URL if there's an error
+                    return _buildRemoteImageFallback(product);
+                  },
+                ),
+              ),
             );
           } else {
             // If local file doesn't exist, fall back to remote URL
@@ -1050,13 +1067,25 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       return _buildRemoteImageFallback(product);
     }
   }
-    Widget _buildRemoteImageFallback(Map<String, dynamic> product) {
+
+  Widget _buildRemoteImageFallback(Map<String, dynamic> product) {
     // We no longer use remote URLs, so just display a placeholder
     return Container(
       width: 120,
       height: 120,
-        color: Colors.grey.shade300,
-        child: const Icon(Icons.image, size: 40, color: Colors.grey),
-      );
-    }
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(Icons.image, size: 40, color: Colors.grey.shade400),
+    );
+  }
 } // End of _ListPageState class

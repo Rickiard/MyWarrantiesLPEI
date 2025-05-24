@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
+import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'services/local_file_storage_service.dart';
 
@@ -223,29 +227,101 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           ),
         );
       }
+    }  }
+
+  Future<void> _showImageSourceDialog() async {
+    final ImageSource? source = await showDialog<ImageSource>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Select Image Source'),
+          content: Text('Choose how you want to add the image:'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.camera),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.camera_alt),
+                  SizedBox(width: 8),
+                  Text('Camera'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.gallery),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library),
+                  SizedBox(width: 8),
+                  Text('Gallery'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+    if (source != null) {
+      await _pickImage(source);
     }
   }
-
-  Future<void> _pickImage() async {
-    final result = await _fileStorage.pickAndStoreImage(context: context);    if (result != null) {
-      setState(() {
-        widget.product['imageUrl'] = ''; // Empty string as we're not using Firebase Storage
-        widget.product['imagePath'] = result['localPath'];
-      });
+  Future<void> _pickImage([ImageSource? source]) async {
+    if (source != null) {
+      // Direct camera/gallery access
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: source);
       
-      // Update in Firestore
-      final user = _auth.currentUser;
-      if (user != null) {
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('products')
-            .doc(widget.product['id'])
-            .update({
-          'imageUrl': '', // Empty string as we're not using Firebase Storage
-          'imagePath': result['localPath'],
-          'updatedAt': FieldValue.serverTimestamp(),
+      if (image != null) {
+        setState(() {
+          widget.product['imageUrl'] = ''; // Empty string as we're not using Firebase Storage
+          widget.product['imagePath'] = image.path;
         });
+        
+        // Update in Firestore
+        final user = _auth.currentUser;
+        if (user != null) {
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('products')
+              .doc(widget.product['id'])
+              .update({
+            'imageUrl': '', // Empty string as we're not using Firebase Storage
+            'imagePath': image.path,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    } else {
+      // Fallback to file storage service for backward compatibility
+      final result = await _fileStorage.pickAndStoreImage(context: context);
+      
+      if (result != null) {
+        setState(() {
+          widget.product['imageUrl'] = ''; // Empty string as we're not using Firebase Storage
+          widget.product['imagePath'] = result['localPath'];
+        });
+        
+        // Update in Firestore
+        final user = _auth.currentUser;
+        if (user != null) {
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('products')
+              .doc(widget.product['id'])
+              .update({
+            'imageUrl': '', // Empty string as we're not using Firebase Storage
+            'imagePath': result['localPath'],
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
       }
     }
   }
@@ -405,12 +481,33 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFAFE1F0),
-      appBar: AppBar(
+      backgroundColor: const Color(0xFFAFE1F0),      appBar: AppBar(
         title: const Text('Product Information'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: _isEditing
+            ? IconButton(
+                icon: Icon(Icons.arrow_back),
+                onPressed: () {
+                  // Cancel editing and go back
+                  setState(() {
+                    _isEditing = false;
+                  });
+                  Navigator.pop(context);
+                },
+              )
+            : null, // Use default back button when not editing
         actions: [
+          if (_isEditing)
+            IconButton(
+              icon: Icon(Icons.close),
+              onPressed: () {
+                // Cancel editing without saving
+                setState(() {
+                  _isEditing = false;
+                });
+              },
+            ),
           IconButton(
             icon: Icon(_isEditing ? Icons.check : Icons.edit),
             onPressed: () {
@@ -436,35 +533,118 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              GestureDetector(
-                onTap: _isEditing ? _pickImage : null,                child: Container(
-                  height: 150,
+            children: [              GestureDetector(
+                onTap: _isEditing ? _showImageSourceDialog : null,
+                child: Container(
+                  height: 160,
+                  margin: EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
+                    border: _isEditing 
+                        ? Border.all(color: Colors.blue, width: 2)
+                        : Border.all(color: Colors.grey.shade300),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 6,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
                   ),
-                  child: widget.product['imagePath'] != null && widget.product['imagePath'].toString().isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.file(
-                            File(widget.product['imagePath']),
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return const Icon(Icons.image_not_supported, size: 60, color: Colors.grey);
-                            },
+                  child: Stack(
+                    children: [
+                      widget.product['imagePath'] != null && widget.product['imagePath'].toString().isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.file(
+                                File(widget.product['imagePath']),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Center(
+                                    child: Icon(Icons.image_not_supported, size: 60, color: Colors.grey)
+                                  );
+                                },
+                              ),
+                            )
+                          : Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    _isEditing ? Icons.add_a_photo : Icons.image_outlined, 
+                                    size: 48, 
+                                    color: _isEditing ? Colors.blue : Colors.grey.shade600
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    _isEditing ? 'Tap to add photo' : 'No photo available', 
+                                    style: TextStyle(
+                                      color: _isEditing ? Colors.blue : Colors.grey.shade700,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16
+                                    )
+                                  ),
+                                  if (_isEditing) ...[
+                                    SizedBox(height: 6),
+                                    Text(
+                                      'Camera or gallery', 
+                                      style: TextStyle(
+                                        color: Colors.blue.shade400,
+                                        fontSize: 12
+                                      )
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                      if (_isEditing && widget.product['imagePath'] != null && widget.product['imagePath'].toString().isNotEmpty)
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: Container(
+                            padding: EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(Icons.edit, color: Colors.white, size: 18),
                           ),
-                        )
-                      : Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(Icons.upload, size: 40, color: Colors.grey),
-                            Text('Add Photo', style: TextStyle(color: Colors.grey)),
-                          ],
                         ),
+                      if (_isEditing)
+                        Positioned(
+                          bottom: 12,
+                          left: 12,
+                          right: 12,
+                          child: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              widget.product['imagePath'] != null && widget.product['imagePath'].toString().isNotEmpty
+                                  ? 'Tap to change image'
+                                  : 'Tap to add image',
+                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
               TextFormField(
                 initialValue: widget.product['name'],
@@ -562,191 +742,288 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                 enabled: _isEditing,
                 onChanged: (value) => widget.product['notes'] = value,
               ),
-              const SizedBox(height: 24),
-
-              const Text('View and Upload Documents', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),              const Text('View and Upload Documents', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: (widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
-                             (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty)
-                          ? () => _launchUrl(
-                              widget.product['receiptUrl'],
-                              localPath: widget.product['receiptPath'],
-                            )
-                          : null,
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.receipt,
-                            color: (widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
-                                   (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty)
-                                ? Colors.blue
-                                : Colors.grey,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'View Receipt',
-                            style: TextStyle(
-                              color: (widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
-                                     (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty)
-                                  ? Colors.blue
-                                  : Colors.grey,
-                              decoration: (widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
-                                          (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty)
-                                  ? TextDecoration.underline
-                                  : null,
+              // Receipt Upload Container
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: ((widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                           (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty))
+                        ? Colors.green 
+                        : Colors.grey.shade300
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          ((widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                           (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty))
+                              ? Icons.check_circle 
+                              : Icons.receipt,
+                          color: ((widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                 (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty))
+                              ? Colors.green 
+                              : Colors.grey,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: ((widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                   (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty))
+                                ? () => _launchUrl(
+                                    widget.product['receiptUrl'],
+                                    localPath: widget.product['receiptPath'],
+                                  )
+                                : null,
+                            child: Text(
+                              'Receipt',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: ((widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                       (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty))
+                                    ? Colors.green.shade700 
+                                    : Colors.black,
+                                decoration: ((widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                            (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty))
+                                    ? TextDecoration.underline 
+                                    : null,
+                              ),
                             ),
                           ),
-                        ],
-                      ),
+                        ),                        ElevatedButton(
+                          onPressed: _isEditing
+                              ? () => _showDocumentSourceDialog('receiptUrl', (result) {
+                                  if (result != null) {
+                                    // UI update is handled in _pickImageAsDocument
+                                  }
+                                })
+                              : null,
+                          child: Text(((widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                      (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty))
+                              ? 'Change file' 
+                              : 'Upload file'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ((widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                              (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty))
+                                ? Colors.green.shade50 
+                                : Colors.white,
+                            foregroundColor: ((widget.product['receiptUrl'] != null && widget.product['receiptUrl'].isNotEmpty) ||
+                                             (widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty))
+                                ? Colors.green.shade700 
+                                : Colors.black,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  ElevatedButton(
-                    onPressed: _isEditing
-                        ? () => _pickAndUploadDocument('receiptUrl')
-                        : null,
-                    child: const Text('Upload'),
-                  ),
-                ],
+                    if ((widget.product['receiptPath'] != null && widget.product['receiptPath'].isNotEmpty)) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'File: ${widget.product['receiptPath']?.split('/').last ?? 'Receipt document'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty
-                          ? () => _launchUrl(widget.product['warrantyUrl'])
-                          : null,
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.verified,
-                            color: widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty
-                                ? Colors.blue
-                                : Colors.grey,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'View Warranty',
-                            style: TextStyle(
-                              color: widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty
-                                  ? Colors.blue
-                                  : Colors.grey,
-                              decoration: widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty
-                                  ? TextDecoration.underline
-                                  : null,
+              // Warranty Upload Container
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: ((widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                           (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty))
+                        ? Colors.green 
+                        : Colors.grey.shade300
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          ((widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                           (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty))
+                              ? Icons.check_circle 
+                              : Icons.verified_user,
+                          color: ((widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                 (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty))
+                              ? Colors.green 
+                              : Colors.grey,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: ((widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                   (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty))
+                                ? () => _launchUrl(
+                                    widget.product['warrantyUrl'],
+                                    localPath: widget.product['warrantyPath'],
+                                  )
+                                : null,
+                            child: Text(
+                              'Warranty',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: ((widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                       (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty))
+                                    ? Colors.green.shade700 
+                                    : Colors.black,
+                                decoration: ((widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                            (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty))
+                                    ? TextDecoration.underline 
+                                    : null,
+                              ),
                             ),
                           ),
-                        ],
-                      ),
+                        ),                        ElevatedButton(
+                          onPressed: _isEditing
+                              ? () => _showDocumentSourceDialog('warrantyUrl', (result) {
+                                  if (result != null) {
+                                    // UI update is handled in _pickImageAsDocument
+                                  }
+                                })
+                              : null,
+                          child: Text(((widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                      (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty))
+                              ? 'Change file' 
+                              : 'Upload file'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ((widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                              (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty))
+                                ? Colors.green.shade50 
+                                : Colors.white,
+                            foregroundColor: ((widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
+                                             (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty))
+                                ? Colors.green.shade700 
+                                : Colors.black,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  ElevatedButton(
-                    onPressed: _isEditing
-                        ? () => _pickAndUploadDocument('warrantyUrl')
-                        : null,
-                    child: const Text('Upload'),
-                  ),
-                ],
+                    if ((widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty)) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'File: ${widget.product['warrantyPath']?.split('/').last ?? 'Warranty document'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: (widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
-                             (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty)
-                          ? () => _launchUrl(
-                              widget.product['warrantyUrl'],
-                              localPath: widget.product['warrantyPath'],
-                            )
-                          : null,
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.verified,
-                            color: (widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
-                                   (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty)
-                                ? Colors.blue
-                                : Colors.grey,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'View Warranty',
-                            style: TextStyle(
-                              color: (widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
-                                     (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty)
-                                  ? Colors.blue
-                                  : Colors.grey,
-                              decoration: (widget.product['warrantyUrl'] != null && widget.product['warrantyUrl'].isNotEmpty) ||
-                                          (widget.product['warrantyPath'] != null && widget.product['warrantyPath'].isNotEmpty)
-                                  ? TextDecoration.underline
-                                  : null,
+              // Other Documents Upload Container
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: ((widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                           (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty))
+                        ? Colors.green 
+                        : Colors.grey.shade300
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          ((widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                           (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty))
+                              ? Icons.check_circle 
+                              : Icons.description,
+                          color: ((widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                                 (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty))
+                              ? Colors.green 
+                              : Colors.grey,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: ((widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                                   (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty))
+                                ? () => _launchUrl(
+                                    widget.product['otherDocumentsUrl'],
+                                    localPath: widget.product['otherDocumentsPath'],
+                                  )
+                                : null,
+                            child: Text(
+                              'Other Documents',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: ((widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                                       (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty))
+                                    ? Colors.green.shade700 
+                                    : Colors.black,
+                                decoration: ((widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                                            (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty))
+                                    ? TextDecoration.underline 
+                                    : null,
+                              ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: _isEditing
-                        ? () => _pickAndUploadDocument('warrantyUrl')
-                        : null,
-                    child: const Text('Upload'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: (widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
-                             (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty)
-                          ? () => _launchUrl(
-                              widget.product['otherDocumentsUrl'],
-                              localPath: widget.product['otherDocumentsPath'],
-                            )
-                          : null,
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.folder,
-                            color: (widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
-                                   (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty)
-                                ? Colors.blue
-                                : Colors.grey,
+                        ),                        ElevatedButton(
+                          onPressed: _isEditing
+                              ? () => _showDocumentSourceDialog('otherDocumentsUrl', (result) {
+                                  if (result != null) {
+                                    // UI update is handled in _pickImageAsDocument
+                                  }
+                                })
+                              : null,
+                          child: Text(((widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                                      (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty))
+                              ? 'Change file' 
+                              : 'Upload file'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ((widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                                              (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty))
+                                ? Colors.green.shade50 
+                                : Colors.white,
+                            foregroundColor: ((widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty) ||
+                                             (widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty))
+                                ? Colors.green.shade700 
+                                : Colors.black,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'View Other Documents',
-                            style: TextStyle(
-                              color: widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty
-                                  ? Colors.blue
-                                  : Colors.grey,
-                              decoration: widget.product['otherDocumentsUrl'] != null && widget.product['otherDocumentsUrl'].isNotEmpty
-                                  ? TextDecoration.underline
-                                  : null,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ),
-                  ElevatedButton(
-                    onPressed: _isEditing
-                        ? () => _pickAndUploadDocument('otherDocumentsUrl')
-                        : null,
-                    child: const Text('Upload'),
-                  ),
-                ],
+                    if ((widget.product['otherDocumentsPath'] != null && widget.product['otherDocumentsPath'].isNotEmpty)) ...[
+                      SizedBox(height: 8),
+                      Text(
+                        'File: ${widget.product['otherDocumentsPath']?.split('/').last ?? 'Other documents'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
 
@@ -822,6 +1099,133 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _showDocumentSourceDialog(String field, Function(Map<String, String>?) onResult) async {
+    final source = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Select Document Source'),
+          content: Text('Choose how you want to add the document:'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('camera'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.camera_alt),
+                  SizedBox(width: 8),
+                  Text('Camera'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('gallery'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library),
+                  SizedBox(width: 8),
+                  Text('Gallery'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('files'),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.insert_drive_file),
+                  SizedBox(width: 8),
+                  Text('Files'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+    
+    if (source != null) {
+      Map<String, String>? result;
+      if (source == 'camera' || source == 'gallery') {
+        result = await _pickImageAsDocument(field, source == 'camera' ? ImageSource.camera : ImageSource.gallery);
+      } else if (source == 'files') {
+        await _pickAndUploadDocument(field);
+        return; // The existing method handles UI updates
+      }
+      onResult(result);
+    }
+  }
+
+  Future<Map<String, String>?> _pickImageAsDocument(String field, ImageSource source) async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: source);
+    
+    if (image != null) {
+      try {
+        final Directory appDir = await getApplicationDocumentsDirectory();
+        String folderName = 'documents';
+        if (field == 'receiptUrl') folderName = 'receipts';
+        if (field == 'warrantyUrl') folderName = 'warranties';
+        
+        final String localDirPath = '${appDir.path}/$folderName';
+        final Directory localDir = Directory(localDirPath);
+        if (!await localDir.exists()) {
+          await localDir.create(recursive: true);
+        }
+        
+        final String fileName = '${const Uuid().v4()}${path.extension(image.path)}';
+        final String localPath = '$localDirPath/$fileName';
+        
+        final File localFile = File(localPath);
+        await localFile.writeAsBytes(await image.readAsBytes());
+        
+        // Update the product data
+        setState(() {
+          widget.product[field] = '';
+          widget.product[field.replaceAll('Url', 'Path')] = localPath;
+        });
+
+        // Update in Firestore
+        await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('products')
+            .doc(widget.product['id'])
+            .update({
+          field: '',
+          field.replaceAll('Url', 'Path'): localPath,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Document uploaded successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        
+        return {
+          'localPath': localPath,
+          'remoteUrl': '',
+        };
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving document: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+    return null;
   }
 
   Widget _buildDropdownWithAddOption(String label, List<String> options, Map<String, dynamic> product, String key, bool isEnabled) {

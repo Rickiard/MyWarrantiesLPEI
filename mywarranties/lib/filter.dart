@@ -453,22 +453,10 @@ class _FilterPageState extends State<FilterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFAFE1F0),      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            // Use the provided callback if available, otherwise fall back to Navigator.pop()
-            if (widget.onBackPressed != null) {
-              widget.onBackPressed!();
-            } else {
-              Navigator.of(context).pop();
-            }
-          },
-        ),
+    return Scaffold(      backgroundColor: const Color(0xFFAFE1F0),      appBar: AppBar(        automaticallyImplyLeading: false, // Remove back button since this is accessed via tab navigation
         title: Row(
           children: [
-            const Text('Filter Products'),
+            const Text('Filter Products', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
             if (_hasActiveFilters)
               Container(
                 margin: EdgeInsets.only(left: 8),
