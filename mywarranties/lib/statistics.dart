@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'services/notification_service.dart';
 
 class StatisticsPage extends StatefulWidget {
   const StatisticsPage({Key? key}) : super(key: key);
@@ -43,96 +44,27 @@ class _StatisticsPageState extends State<StatisticsPage> {
     }
     
     try {
-      final purchaseDateTime = DateTime.parse(purchaseDate);
-      print('Parsed purchase date: $purchaseDateTime');
+      String formattedWarranty = warrantyPeriod;
       
-      int warrantyDays = 0;
-      
-      // If warrantyPeriod contains both value and unit (e.g., "2 years")
-      if (warrantyPeriod.contains(' ')) {
-        warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
-      } 
-      // If warrantyPeriod is just a number and warrantyUnit is separate
-      else if (warrantyUnit != null) {
-        final value = int.tryParse(warrantyPeriod) ?? 0;
-        if (warrantyUnit.startsWith('day')) {
-          warrantyDays = value;
-        } else if (warrantyUnit.startsWith('month')) {
-          warrantyDays = value * 30;
-        } else if (warrantyUnit.startsWith('year')) {
-          warrantyDays = value * 365;
-        }
+      // If warrantyPeriod is just a number and warrantyUnit is separate, combine them
+      if (!warrantyPeriod.contains(' ') && warrantyUnit != null) {
+        formattedWarranty = '$warrantyPeriod $warrantyUnit';
       }
       
-      print('Warranty days: $warrantyDays');
+      // Use the notification service for consistent date calculation
+      final notificationService = NotificationService();
+      final expiryDate = notificationService.calculateExpiryDate(
+        purchaseDate, 
+        formattedWarranty, 
+        warrantyExtension
+      );
       
-      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      print('Extension days: $extensionDays');
-      
-      final totalDays = warrantyDays + extensionDays;
-      print('Total warranty days: $totalDays');
-      
-      final expiryDate = purchaseDateTime.add(Duration(days: totalDays));
       print('Calculated expiry date: $expiryDate');
-      
       return expiryDate;
     } catch (e) {
       print('Error calculating expiry date: $e');
       return null;
     }
-  }
-  
-  // Helper function to parse warranty period to days
-  int _parseWarrantyPeriod(String warranty) {
-    print('Parsing warranty period: $warranty');
-    
-    if (warranty.isEmpty) {
-      print('Empty warranty period, returning 0');
-      return 0;
-    }
-    
-    final lowerWarranty = warranty.toLowerCase().trim();
-    
-    if (lowerWarranty == 'lifetime') {
-      print('Lifetime warranty, returning 36500 days');
-      return 36500; // 100 years as lifetime
-    }
-    
-    // Split value and unit
-    final parts = lowerWarranty.split(' ');
-    print('Warranty parts: $parts');
-    
-    if (parts.length < 2) {
-      print('Invalid warranty format (less than 2 parts), returning 0');
-      return 0;
-    }
-    
-    final valueStr = parts[0].trim();
-    final value = int.tryParse(valueStr);
-    
-    if (value == null) {
-      print('Could not parse warranty value: $valueStr, returning 0');
-      return 0;
-    }
-    
-    final unit = parts[1].trim();
-    print('Warranty value: $value, unit: $unit');
-    
-    if (unit.startsWith('day')) {
-      print('Days unit, returning $value days');
-      return value;
-    } else if (unit.startsWith('month')) {
-      final days = value * 30;
-      print('Months unit, returning $days days');
-      return days;
-    } else if (unit.startsWith('year')) {
-      final days = value * 365;
-      print('Years unit, returning $days days');
-      return days;
-    }
-    
-    print('Unknown unit: $unit, returning 0');
-    return 0;
   }
 
   Future<void> _fetchStatistics() async {
@@ -238,25 +170,18 @@ class _StatisticsPageState extends State<StatisticsPage> {
             productsWithLongWarranty.add('$productName: Lifetime warranty');
             print('Found lifetime warranty product: $productName');
           } else {
-            // For non-lifetime warranties, calculate the days
-            int warrantyDays = 0;
+            // For non-lifetime warranties, use the notification service to calculate
+            String formattedWarranty = warrantyPeriod;
             
-            // If warrantyPeriod contains both value and unit (e.g., "2 years")
-            if (warrantyPeriod.contains(' ')) {
-              warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
-            } 
-            // If warrantyPeriod is just a number and warrantyUnit is separate
-            else if (warrantyUnit != null) {
-              final value = int.tryParse(warrantyPeriod) ?? 0;
-              if (warrantyUnit.startsWith('day')) {
-                warrantyDays = value;
-              } else if (warrantyUnit.startsWith('month')) {
-                warrantyDays = value * 30;
-              } else if (warrantyUnit.startsWith('year')) {
-                warrantyDays = value * 365;
-              }
+            // If warrantyPeriod is just a number and warrantyUnit is separate, combine them
+            if (!warrantyPeriod.contains(' ') && warrantyUnit != null) {
+              formattedWarranty = '$warrantyPeriod $warrantyUnit';
             }
             
+            // Use the notification service for consistent calculation
+            NotificationService notificationService = NotificationService();
+            int warrantyDays = notificationService.parseWarrantyPeriodToDays(formattedWarranty);
+
             if (warrantyDays > 365) { // More than 1 year
               warrantyYear++;
               productsWithLongWarranty.add('$productName: $warrantyPeriod $warrantyUnit (${warrantyDays} days)');
@@ -387,3 +312,5 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 }
+
+

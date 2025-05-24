@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "598622253789",
+    "firebase_url": "https://mywarranties-cb801-default-rtdb.europe-west1.firebasedatabase.app",
     "project_id": "mywarranties-cb801",
     "storage_bucket": "mywarranties-cb801.firebasestorage.app"
   },
@@ -13,6 +14,14 @@
         }
       },
       "oauth_client": [
+        {
+          "client_id": "598622253789-clf3r989a2j7h25sce87av3qpuqkhiit.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.mywarranties",
+            "certificate_hash": "c5b45a77f6227f9f51926624015160afde746510"
+          }
+        },
         {
           "client_id": "598622253789-1oljk3c82dcqorbofvvb2otn12bkkp9s.apps.googleusercontent.com",
           "client_type": 3
@@ -29,6 +38,13 @@
             {
               "client_id": "598622253789-1oljk3c82dcqorbofvvb2otn12bkkp9s.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "598622253789-11mqpn2ga6cf5nka8intspn63nb5s8qn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.mywarranties"
+              }
             }
           ]
         }

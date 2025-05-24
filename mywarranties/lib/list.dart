@@ -451,48 +451,26 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     _searchController.dispose();
     super.dispose();
   }
-
   String _calculateExpiryDate(String? purchaseDate, String? warrantyPeriod, String? warrantyExtension) {
     if (purchaseDate == null || warrantyPeriod == null) return 'Unknown';
     if (warrantyPeriod.toLowerCase() == 'lifetime') return 'Never expires';
+    
     try {
-      final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
-      return '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
-    } catch (e) {
+      // Use the notification service for consistent date calculation
+      final notificationService = NotificationService();
+      final expiryDate = notificationService.calculateExpiryDate(
+        purchaseDate, 
+        warrantyPeriod, 
+        warrantyExtension
+      );
+      
+      if (expiryDate == null) return 'Never expires';
+      
+      return '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';    } catch (e) {
       return 'Unknown';
     }
   }
 
-  int _parseWarrantyPeriod(String warranty) {
-    if (warranty.isEmpty) return 0;
-  
-    // More robust check for lifetime warranty
-    if (warranty.toLowerCase().contains('lifetime')) return 36500; // 100 years as lifetime
-  
-    // Split value and unit
-    final parts = warranty.toLowerCase().trim().split(' ');
-    if (parts.length < 2) return 0;
-  
-    try {
-      final value = int.tryParse(parts[0]) ?? 0;
-      final unit = parts[1];
-      
-      if (unit.startsWith('day')) {
-        return value;
-      } else if (unit.startsWith('month')) {
-        return value * 30;
-      } else if (unit.startsWith('year')) {
-        return value * 365;
-      }
-      return 0;
-    } catch (e) {
-      return 0; // Return 0 if any parsing errors occur
-    }
-  }
-  
   bool _isWarrantyExpiringSoon(Map<String, dynamic> product) {
     try {
       final String? warrantyPeriod = product['warrantyPeriod'];
@@ -512,10 +490,15 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       
       if (purchaseDate == null || warrantyPeriod == null) return false;
       
-      final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
+      // Use the notification service for consistent date calculation
+      final notificationService = NotificationService();
+      final expiryDate = notificationService.calculateExpiryDate(
+        purchaseDate, 
+        warrantyPeriod, 
+        warrantyExtension
+      );
+      
+      if (expiryDate == null) return false; // Lifetime warranty
       
       final now = DateTime.now();
       final daysUntilExpiry = expiryDate.difference(now).inDays;
@@ -525,8 +508,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       return false;
     }
   }
-  
-  Color _getExpiryTextColor(Map<String, dynamic> product) {
+    Color _getExpiryTextColor(Map<String, dynamic> product) {
     try {
       final String? warrantyPeriod = product['warrantyPeriod'];
       final String? warrantyExtension = product['warrantyExtension'];
@@ -545,10 +527,15 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       
       if (purchaseDate == null || warrantyPeriod == null) return Colors.black;
       
-      final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
+      // Use the notification service for consistent date calculation
+      final notificationService = NotificationService();
+      final expiryDate = notificationService.calculateExpiryDate(
+        purchaseDate, 
+        warrantyPeriod, 
+        warrantyExtension
+      );
+      
+      if (expiryDate == null) return Colors.green; // Lifetime warranty
       
       final now = DateTime.now();
       final daysUntilExpiry = expiryDate.difference(now).inDays;
@@ -568,8 +555,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       return Colors.black;
     }
   }
-  
-  Color _getExpiryBadgeColor(Map<String, dynamic> product) {
+    Color _getExpiryBadgeColor(Map<String, dynamic> product) {
     try {
       final String? purchaseDate = product['purchaseDate'];
       final String? warrantyPeriod = product['warrantyPeriod'];
@@ -577,10 +563,15 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       
       if (purchaseDate == null || warrantyPeriod == null) return Colors.grey;
       
-      final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
+      // Use the notification service for consistent date calculation
+      final notificationService = NotificationService();
+      final expiryDate = notificationService.calculateExpiryDate(
+        purchaseDate, 
+        warrantyPeriod, 
+        warrantyExtension
+      );
+      
+      if (expiryDate == null) return Colors.green; // Lifetime warranty
       
       final now = DateTime.now();
       final daysUntilExpiry = expiryDate.difference(now).inDays;
@@ -600,8 +591,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       return Colors.grey;
     }
   }
-  
-  String _getExpiryBadgeText(Map<String, dynamic> product) {
+    String _getExpiryBadgeText(Map<String, dynamic> product) {
     try {
       final String? warrantyPeriod = product['warrantyPeriod'];
       final String? warrantyExtension = product['warrantyExtension'];
@@ -620,13 +610,20 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       
       if (purchaseDate == null || warrantyPeriod == null) return '';
       
-      final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyDays = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionDays = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      final expiryDate = purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
+      // Use the notification service for consistent date calculation
+      final notificationService = NotificationService();
+      final expiryDate = notificationService.calculateExpiryDate(
+        purchaseDate, 
+        warrantyPeriod, 
+        warrantyExtension
+      );
+        if (expiryDate == null) return 'LIFETIME'; // Lifetime warranty
       
+      // Normalize dates to midnight for accurate day comparison
       final now = DateTime.now();
-      final daysUntilExpiry = expiryDate.difference(now).inDays;
+      final today = DateTime(now.year, now.month, now.day);
+      final expiryDay = DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+      final daysUntilExpiry = expiryDay.difference(today).inDays;
       
       if (daysUntilExpiry < 0) {
         return 'EXPIRED';
@@ -870,71 +867,74 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                         borderRadius: BorderRadius.circular(15),
                                       ),
                                       child: Padding(
-                                        padding: const EdgeInsets.all(16.0),
-                                        child: Row(
+                                        padding: const EdgeInsets.all(16.0),                                        child: Column(
                                           children: [
-                                            ClipRRect(
-                                              borderRadius: BorderRadius.circular(8),
-                                              child: _buildImageWidget(product),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    product['name'] ?? 'Unknown Product',
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 24,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  Text(
-                                                    'Warranty: ${product['warrantyPeriod'] ?? 'Unknown'}',
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 16,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    'Warranty Extension: ${product['warrantyExtension'] ?? 'None'}',
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 16,
-                                                    ),
-                                                  ),
-                                                  Row(
+                                            Row(
+                                              children: [
+                                                ClipRRect(
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  child: _buildImageWidget(product),
+                                                ),
+                                                const SizedBox(width: 16),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
                                                     children: [
-                                                      Expanded(
-                                                        child: Text(
-                                                          'Expires: ${_calculateExpiryDate(product['purchaseDate'], product['warrantyPeriod'], product['warrantyExtension'])}',
-                                                          style: GoogleFonts.poppins(
-                                                            fontSize: 16,
-                                                            color: _getExpiryTextColor(product),
-                                                            fontWeight: _isWarrantyExpiringSoon(product) ? FontWeight.bold : FontWeight.normal,
-                                                          ),
+                                                      Text(
+                                                        product['name'] ?? 'Unknown Product',
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 24,
+                                                          fontWeight: FontWeight.w600,
                                                         ),
                                                       ),
-                                                      if (_isWarrantyExpiringSoon(product))
-                                                        Container(
-                                                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                          decoration: BoxDecoration(
-                                                            color: _getExpiryBadgeColor(product),
-                                                            borderRadius: BorderRadius.circular(12),
-                                                          ),
-                                                          child: Text(
-                                                            _getExpiryBadgeText(product),
-                                                            style: TextStyle(
-                                                              color: Colors.white,
-                                                              fontWeight: FontWeight.bold,
-                                                              fontSize: 12,
-                                                            ),
-                                                          ),
+                                                      const SizedBox(height: 8),
+                                                      Text(
+                                                        'Warranty: ${product['warrantyPeriod'] ?? 'Unknown'}',
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 16,
                                                         ),
+                                                      ),
+                                                      Text(
+                                                        'Warranty Extension: ${product['warrantyExtension'] ?? 'None'}',
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 16,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        'Expires: ${_calculateExpiryDate(product['purchaseDate'], product['warrantyPeriod'], product['warrantyExtension'])}',
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 16,
+                                                          color: _getExpiryTextColor(product),
+                                                          fontWeight: _isWarrantyExpiringSoon(product) ? FontWeight.bold : FontWeight.normal,
+                                                        ),
+                                                      ),
                                                     ],
                                                   ),
-                                                ],
-                                              ),
+                                                ),
+                                              ],
                                             ),
+                                            if (_isWarrantyExpiringSoon(product))
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 12.0),
+                                                child: Align(
+                                                  alignment: Alignment.centerLeft,
+                                                  child: Container(
+                                                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color: _getExpiryBadgeColor(product),
+                                                      borderRadius: BorderRadius.circular(16),
+                                                    ),
+                                                    child: Text(
+                                                      _getExpiryBadgeText(product),
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
                                           ],
                                         ),
                                       ),
@@ -1026,15 +1026,10 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
         future: localFile.exists(),
         builder: (context, snapshot) {          if (snapshot.connectionState == ConnectionState.done && 
               snapshot.hasData && 
-              snapshot.data == true) {
-            // Local file exists, use adaptive container for both horizontal and vertical images
+              snapshot.data == true) {            // Local file exists, use adaptive container for both horizontal and vertical images
             return Container(
-              constraints: BoxConstraints(
-                maxWidth: 100,   // Increased to better accommodate horizontal images
-                maxHeight: 200,  // Maintains good height for vertical images
-                minWidth: 100,    // Increased minimum for better visibility
-                minHeight: 60,   // Reduced minimum height for horizontal images
-              ),
+              width: 120,
+              height: 140,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
@@ -1049,7 +1044,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                 borderRadius: BorderRadius.circular(12),
                 child: Image.file(
                   localFile,
-                  fit: BoxFit.contain,
+                  fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     // Fall back to remote URL if there's an error
                     return _buildRemoteImageFallback(product);
@@ -1066,16 +1061,10 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       // No local path, use remote image
       return _buildRemoteImageFallback(product);
     }
-  }
-  Widget _buildRemoteImageFallback(Map<String, dynamic> product) {
-    // Display placeholder with adaptive sizing for both horizontal and vertical orientations
+  }  Widget _buildRemoteImageFallback(Map<String, dynamic> product) {    // Display placeholder with adaptive sizing for both horizontal and vertical orientations
     return Container(
-      constraints: BoxConstraints(
-        maxWidth: 100,   // Increased to better accommodate horizontal images
-        maxHeight: 200,  // Maintains good height for vertical images
-        minWidth: 100,    // Increased minimum for better visibility
-        minHeight: 120,   // Reduced minimum height for horizontal images
-      ),
+      width: 120,
+      height: 140,
       decoration: BoxDecoration(
         color: Colors.grey.shade200,
         borderRadius: BorderRadius.circular(12),
@@ -1092,3 +1081,4 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     );
   }
 } // End of _ListPageState class
+

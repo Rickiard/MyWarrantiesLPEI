@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
-import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,12 +16,6 @@ class NotificationService {
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // Channel IDs
-  static const String _warrantyChannelId = 'warranty_expiry_channel';
-  static const String _warrantyChannelName = 'Warranty Expiry Notifications';
-  static const String _warrantyChannelDescription = 'Notifications for warranty expiry dates';
-
   // Notification IDs
   static const int _thirtyDaysNotificationId = 1;
   static const int _sevenDaysNotificationId = 2;
@@ -54,18 +46,13 @@ class NotificationService {
       if (!isAllowed) {
         AwesomeNotifications().requestPermissionToSendNotifications();
       }
-    });
-
-    // Listen to notification events
+    });    // Listen to notification events
     AwesomeNotifications().setListeners(
       onActionReceivedMethod: _onNotificationTapped,
       onNotificationCreatedMethod: _onNotificationCreated,
       onNotificationDisplayedMethod: _onNotificationDisplayed,
       onDismissActionReceivedMethod: _onNotificationDismissed,
     );
-
-    // Initialize timezone
-    tz_data.initializeTimeZones();
 
     // Initialize Firebase Messaging
     await _initializeFirebaseMessaging();
@@ -148,20 +135,7 @@ class NotificationService {
         payload: {'data': payload ?? ''},
         notificationLayout: NotificationLayout.Default,
       ),
-      schedule: NotificationCalendar.fromDate(date: reminderDate),
-    );
-  }
-
-  Future<void> _requestPermissions() async {
-    // Request permission for notifications
-    NotificationSettings settings = await _firebaseMessaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-
-    print('User granted permission: ${settings.authorizationStatus}');
+      schedule: NotificationCalendar.fromDate(date: reminderDate),    );
   }
 
   Future<void> _initializeFirebaseMessaging() async {
@@ -309,33 +283,36 @@ class NotificationService {
       print('Error checking warranties: $e');
     }
   }
-
   DateTime? calculateExpiryDate(String purchaseDate, String warrantyPeriod, String? warrantyExtension) {
     try {
       if (warrantyPeriod.toLowerCase() == 'lifetime') return null;
       
-      final purchaseDateTime = DateTime.parse(purchaseDate);
-      final warrantyMonths = _parseWarrantyPeriod(warrantyPeriod);
-      final extensionMonths = _parseWarrantyPeriod(warrantyExtension ?? '0');
-      return purchaseDateTime.add(Duration(days: (warrantyMonths + extensionMonths) * 30));
+      final purchaseDateTime = DateTime.parse(purchaseDate);      int warrantyDays = parseWarrantyPeriodToDays(warrantyPeriod);
+      int extensionDays = parseWarrantyPeriodToDays(warrantyExtension ?? '0');
+      
+      // Use precise date calculation that respects actual calendar days
+      return purchaseDateTime.add(Duration(days: warrantyDays + extensionDays));
     } catch (e) {
       print('Error calculating expiry date: $e');
       return null;
     }
   }
 
-  int _parseWarrantyPeriod(String warranty) {
-    if (warranty.toLowerCase() == 'lifetime') return 0;
-    final parts = warranty.toLowerCase().split(' ');
-    if (parts.isEmpty) return 0;
+    int parseWarrantyPeriodToDays(String warranty) {
+    if (warranty.isEmpty || warranty.toLowerCase() == 'lifetime') return 0;
+    
+    final parts = warranty.toLowerCase().trim().split(' ');
+    if (parts.length < 2) return 0;
     
     final value = int.tryParse(parts[0]) ?? 0;
-    if (warranty.contains('day')) {
-      return value ~/ 30; // Convert days to months
-    } else if (warranty.contains('month')) {
+    final unit = parts[1];
+    
+    if (unit.startsWith('day')) {
       return value;
-    } else if (warranty.contains('year')) {
-      return value * 12;
+    } else if (unit.startsWith('month')) {
+      return value * 30; // Approximate days per month
+    } else if (unit.startsWith('year')) {
+      return value * 365; // Approximate days per year
     }
     return 0;
   }

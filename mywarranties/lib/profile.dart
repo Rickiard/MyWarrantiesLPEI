@@ -962,11 +962,10 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
             
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Row(
-                  children: [
+                content: Row(                children: [
                     Icon(Icons.check_circle, color: Colors.white),
                     SizedBox(width: 10),
-                    Expanded(child: Text('✅ Foto de perfil guardada independentemente!')),
+                    Expanded(child: Text('Profile picture added successfuly!')),
                   ],
                 ),
                 backgroundColor: Colors.green[600],
@@ -993,13 +992,12 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
 
               setState(() {});
               
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
+              ScaffoldMessenger.of(context).showSnackBar(                SnackBar(
                   content: Row(
                     children: [
                       Icon(Icons.warning, color: Colors.white),
                       SizedBox(width: 10),
-                      Expanded(child: Text('⚠️ Foto guardada com referência original')),
+                      Expanded(child: Text('Photo saved with original reference')),
                     ],
                   ),
                   backgroundColor: Colors.orange,
@@ -1017,7 +1015,7 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                 children: [
                   Icon(Icons.error_outline, color: Colors.white),
                   SizedBox(width: 10),
-                  Expanded(child: Text('Erro ao atualizar foto de perfil.')),
+                  Expanded(child: Text('Error updating profile picture')),
                 ],
               ),
               backgroundColor: Colors.red[700],
@@ -1531,3 +1529,5 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
     );
   }
 }
+
+

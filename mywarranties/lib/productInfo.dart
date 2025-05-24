@@ -73,27 +73,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
       _stores = stores.where((e) => e.isNotEmpty).toList();
     });
   }
-
   Future<void> _deleteProduct() async {
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Product'),
-        content: const Text('Are you sure you want to delete this product?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldDelete != true) return;
 
     if (widget.onDelete != null) {
       widget.onDelete!();
@@ -307,11 +287,10 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Row(
-                  children: [
+                content: Row(                children: [
                     Icon(Icons.check_circle, color: Colors.white),
                     SizedBox(width: 10),
-                    Expanded(child: Text('✅ Imagem guardada independentemente!')),
+                    Expanded(child: Text('Photo added successfully!')),
                   ],
                 ),
                 backgroundColor: Colors.green,
@@ -343,12 +322,11 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
+              SnackBar(                content: Row(
                   children: [
                     Icon(Icons.warning, color: Colors.white),
                     SizedBox(width: 10),
-                    Expanded(child: Text('⚠️ Usando referência original (pode desaparecer se apagar da galeria)')),
+                    Expanded(child: Text('Photo saved with original reference')),
                   ],
                 ),
                 backgroundColor: Colors.orange,
@@ -439,15 +417,14 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
             pathField: copiedFilePath, // Save copy path
             'updatedAt': FieldValue.serverTimestamp(),
           });
-          
-          if (mounted) {
+            if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Row(
                   children: [
                     Icon(Icons.check_circle, color: Colors.white),
                     SizedBox(width: 10),
-                    Expanded(child: Text('✅ Documento guardado independentemente!')),
+                    Expanded(child: Text('Document added successfully!')),
                   ],
                 ),
                 backgroundColor: Colors.green,
@@ -495,15 +472,14 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
             pathField: result['localPath'],
             'updatedAt': FieldValue.serverTimestamp(),
           });
-          
-          if (mounted) {
+            if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Row(
                   children: [
                     Icon(Icons.warning, color: Colors.white),
                     SizedBox(width: 10),
-                    Expanded(child: Text('⚠️ Documento guardado com referência original')),
+                    Expanded(child: Text('Document saved with original reference')),
                   ],
                 ),
                 backgroundColor: Colors.orange,
@@ -676,41 +652,37 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [              GestureDetector(
-                onTap: _isEditing ? _showImageSourceDialog : null,                child: Container(
-                  constraints: BoxConstraints(
-                    maxWidth: 200,   // Increased to better accommodate horizontal images
-                    maxHeight: 300,  // Maintains good height for vertical images
-                    minWidth: 120,    // Increased minimum for better visibility
-                    minHeight: 80,   // Reduced minimum height for horizontal images
-                  ),
+                onTap: _isEditing ? _showImageSourceDialog : null,
+                child: Container(
+                  width: double.infinity,
+                  height: 300,
                   margin: EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     border: _isEditing 
                         ? Border.all(color: Colors.blue, width: 2)
                         : Border.all(color: Colors.grey.shade300),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.1),
-                        blurRadius: 6,
-                        offset: Offset(0, 3),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
                       ),
                     ],
                   ),
                   child: Stack(
-                    children: [
-                      widget.product['imagePath'] != null && widget.product['imagePath'].toString().isNotEmpty
+                    children: [                      widget.product['imagePath'] != null && widget.product['imagePath'].toString().isNotEmpty
                           ? ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(14),
                               child: Image.file(
                                 File(widget.product['imagePath']),
-                                fit: BoxFit.contain, // Changed to contain to avoid cropping
+                                fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: double.infinity,
                                 errorBuilder: (context, error, stackTrace) {
                                   return const Center(
-                                    child: Icon(Icons.image_not_supported, size: 60, color: Colors.grey)
+                                    child: Icon(Icons.image_not_supported, size: 80, color: Colors.grey)
                                   );
                                 },
                               ),
@@ -718,28 +690,27 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                           : Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
+                                children: [                                  Icon(
                                     _isEditing ? Icons.add_a_photo : Icons.image_outlined, 
-                                    size: 48, 
+                                    size: 64, 
                                     color: _isEditing ? Colors.blue : Colors.grey.shade600
                                   ),
-                                  SizedBox(height: 12),
+                                  SizedBox(height: 16),
                                   Text(
                                     _isEditing ? 'Tap to add photo' : 'No photo available', 
                                     style: TextStyle(
                                       color: _isEditing ? Colors.blue : Colors.grey.shade700,
                                       fontWeight: FontWeight.w600,
-                                      fontSize: 16
+                                      fontSize: 18
                                     )
                                   ),
                                   if (_isEditing) ...[
-                                    SizedBox(height: 6),
+                                    SizedBox(height: 8),
                                     Text(
                                       'Camera or gallery', 
                                       style: TextStyle(
                                         color: Colors.blue.shade400,
-                                        fontSize: 12
+                                        fontSize: 14
                                       )
                                     ),
                                   ],
@@ -1168,15 +1139,13 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-
-              ElevatedButton(
-                onPressed: _isLoading ? null : _deleteProduct,
+              const SizedBox(height: 24),              ElevatedButton(
+                onPressed: _isLoading ? null : () => _showDeleteConfirmation(),
                 child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Delete', style: TextStyle(fontSize: 16)),
+                    : const Text('Delete', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red[300],
+                  backgroundColor: Colors.red[600],
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -1336,12 +1305,11 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           });
 
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
+            SnackBar(              content: Row(
                 children: [
                   Icon(Icons.check_circle, color: Colors.white),
                   SizedBox(width: 10),
-                  Expanded(child: Text('✅ Documento guardado independentemente!')),
+                  Expanded(child: Text('Document added successfully!')),
                 ],
               ),
               backgroundColor: Colors.green,
@@ -1394,9 +1362,8 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
             SnackBar(
               content: Row(
                 children: [
-                  Icon(Icons.warning, color: Colors.white),
-                  SizedBox(width: 10),
-                  Expanded(child: Text('⚠️ Documento guardado com referência original')),
+                  Icon(Icons.warning, color: Colors.white),                SizedBox(width: 10),
+                  Expanded(child: Text('Document saved with original reference')),
                 ],
               ),
               backgroundColor: Colors.orange,
@@ -1416,7 +1383,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
               children: [
                 Icon(Icons.error_outline, color: Colors.white),
                 SizedBox(width: 10),
-                Expanded(child: Text('Erro ao guardar documento: $e')),
+                Expanded(child: Text('Error saving document')),
               ],
             ),
             backgroundColor: Colors.red,
@@ -1493,4 +1460,55 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
       ],
     );
   }
+
+  Future<void> _showDeleteConfirmation() async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber, color: Colors.red[600], size: 28),
+            SizedBox(width: 12),
+            Text('Confirm Deletion', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete this product?', 
+                style: TextStyle(fontSize: 16)),
+            SizedBox(height: 8),
+            Text('Product: ${widget.product['name'] ?? 'Unknown'}', 
+                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[700])),
+            SizedBox(height: 12),
+            Text('This action cannot be undone.', 
+                style: TextStyle(color: Colors.red[700], fontStyle: FontStyle.italic)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[600],
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true) {
+      await _deleteProduct();
+    }
+  }
 }
+
+

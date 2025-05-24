@@ -160,12 +160,11 @@ class _AddProductPageState extends State<AddProductPage> {
           
           // Show success feedback
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
+            SnackBar(              content: Row(
                 children: [
                   Icon(Icons.check_circle, color: Colors.white),
                   SizedBox(width: 10),
-                  Expanded(child: Text('✅ Imagem guardada independentemente!')),
+                  Expanded(child: Text('Photo of product added successfully!')),
                 ],
               ),
               backgroundColor: Colors.green,
@@ -183,10 +182,9 @@ class _AddProductPageState extends State<AddProductPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
-                children: [
-                  Icon(Icons.warning, color: Colors.white),
+                children: [                  Icon(Icons.warning, color: Colors.white),
                   SizedBox(width: 10),
-                  Expanded(child: Text('⚠️ Usando referência original (pode desaparecer se apagar da galeria)')),
+                  Expanded(child: Text('Photo saved with original reference')),
                 ],
               ),
               backgroundColor: Colors.orange,
@@ -230,16 +228,14 @@ class _AddProductPageState extends State<AddProductPage> {
         result['localPath']!,
         folder, // 'receipts', 'warranties', 'documents'
       );
-      
-      if (copiedFilePath != null) {
-        // Sucesso - usar cópia independente
+        if (copiedFilePath != null) {        // Sucesso - usar cópia independente
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
               children: [
                 Icon(Icons.check_circle, color: Colors.white),
                 SizedBox(width: 10),
-                Expanded(child: Text('✅ Documento guardado independentemente!')),
+                Expanded(child: Text('Document added successfully!')),
               ],
             ),
             backgroundColor: Colors.green,
@@ -250,8 +246,7 @@ class _AddProductPageState extends State<AddProductPage> {
         return {
           'localPath': copiedFilePath,
           'remoteUrl': '', // Não usamos URLs remotos
-        };
-      } else {
+        };      } else {
         // Fallback - usar ficheiro original com aviso
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -259,7 +254,7 @@ class _AddProductPageState extends State<AddProductPage> {
               children: [
                 Icon(Icons.warning, color: Colors.white),
                 SizedBox(width: 10),
-                Expanded(child: Text('⚠️ Documento guardado com referência original')),
+                Expanded(child: Text('Document saved with original reference')),
               ],
             ),
             backgroundColor: Colors.orange,
@@ -482,20 +477,17 @@ class _AddProductPageState extends State<AddProductPage> {
         child: Form(
           key: _formKey,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [              // Add Photo
+            crossAxisAlignment: CrossAxisAlignment.stretch,            children: [
+              // Add Photo
               GestureDetector(
-                onTap: () => _showImageSourceDialog(),                child: Container(
-                  constraints: BoxConstraints(
-                    maxWidth: 200,   // Significantly increased for better horizontal image display
-                    maxHeight: 300,  // Increased height for better vertical image display
-                    minWidth: 120,   // Increased minimum for better visibility
-                    minHeight: 80,   // Increased minimum height
-                  ),
+                onTap: () => _showImageSourceDialog(),
+                child: Container(
+                  width: double.infinity,
+                  height: 300,
                   margin: EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: _productImage != null ? Colors.green : Colors.grey.shade300,
                       width: 2,
@@ -503,19 +495,18 @@ class _AddProductPageState extends State<AddProductPage> {
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.1),
-                        blurRadius: 6,
-                        offset: Offset(0, 3),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
                       ),
                     ],
                   ),
                   child: _productImage != null
                       ? Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
+                          children: [                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
                               child: Image.file(
                                 _productImage!, 
-                                fit: BoxFit.contain, // Changed to contain to avoid cropping
+                                fit: BoxFit.cover,
                                 width: double.infinity, 
                                 height: double.infinity
                               ),
@@ -560,23 +551,22 @@ class _AddProductPageState extends State<AddProductPage> {
                         )
                       : Column(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_a_photo, size: 48, color: Colors.grey.shade600),
-                            SizedBox(height: 12),
+                          children: [                            Icon(Icons.add_a_photo, size: 64, color: Colors.grey.shade600),
+                            SizedBox(height: 16),
                             Text(
                               'Add Product Photo', 
                               style: TextStyle(
                                 color: Colors.grey.shade700, 
                                 fontWeight: FontWeight.w600,
-                                fontSize: 16
+                                fontSize: 18
                               )
                             ),
-                            SizedBox(height: 6),
+                            SizedBox(height: 8),
                             Text(
                               'Tap to upload from camera or gallery', 
                               style: TextStyle(
                                 color: Colors.grey.shade500, 
-                                fontSize: 12
+                                fontSize: 14
                               )
                             ),
                           ],
@@ -995,15 +985,14 @@ class _AddProductPageState extends State<AddProductPage> {
       try {
         // ✅ Usar serviço de cópias independentes para documentos
         final String? copiedImagePath = await _imageCopyService.createImageCopy(image.path);
-        
-        if (copiedImagePath != null) {
+          if (copiedImagePath != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
                 children: [
                   Icon(Icons.check_circle, color: Colors.white),
                   SizedBox(width: 10),
-                  Expanded(child: Text('✅ Documento guardado independentemente!')),
+                  Expanded(child: Text('Document added successfully!')),
                 ],
               ),
               backgroundColor: Colors.green,
@@ -1032,12 +1021,11 @@ class _AddProductPageState extends State<AddProductPage> {
           await localFile.writeAsBytes(await image.readAsBytes());
           
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
+            SnackBar(              content: Row(
                 children: [
                   Icon(Icons.warning, color: Colors.white),
                   SizedBox(width: 10),
-                  Expanded(child: Text('⚠️ Documento guardado com referência original')),
+                  Expanded(child: Text('Document saved with original reference')),
                 ],
               ),
               backgroundColor: Colors.orange,
@@ -1057,7 +1045,7 @@ class _AddProductPageState extends State<AddProductPage> {
               children: [
                 Icon(Icons.error_outline, color: Colors.white),
                 SizedBox(width: 10),
-                Expanded(child: Text('Erro ao guardar documento: $e')),
+                Expanded(child: Text('Error saving document: $e')),
               ],
             ),
             backgroundColor: Colors.red,
@@ -1068,4 +1056,30 @@ class _AddProductPageState extends State<AddProductPage> {
     }
     return null;
   }
+
+  // Utility method to show SnackBar with icon without emoji duplication
+  void showSnackBarWithIcon({
+    required IconData icon,
+    required String message,
+    required Color backgroundColor,
+    int durationSeconds = 2,
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white),
+            SizedBox(width: 10),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: backgroundColor,
+        duration: Duration(seconds: durationSeconds),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 }
+
+
+
