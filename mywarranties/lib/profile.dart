@@ -7,6 +7,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'notification_settings.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'services/local_file_storage_service.dart';
+import 'services/image_copy_service.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
 // Initialize GoogleSignIn
@@ -25,9 +27,9 @@ class ProfilePage extends StatefulWidget {
   _ProfilePageState createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FileStorageService _fileStorage = FileStorageService();  
+  final ImageCopyService _imageCopyService = ImageCopyService();
   bool _isLoading = true;
   String _username = '';
   String _email = '';
@@ -895,60 +897,136 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
     );
-  }
-  Future<void> _changeProfilePicture() async {
-    // Use FileStorageService to pick and store the image
-    final result = await _fileStorage.pickAndStoreImage(
+  }  Future<void> _changeProfilePicture() async {
+    // Show image source dialog
+    final ImageSource? source = await showDialog<ImageSource>(
       context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Select Image Source'),
+          content: Text('Choose how you want to add the profile picture:'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.camera),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.camera_alt),
+                  SizedBox(width: 8),
+                  Text('Camera'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(ImageSource.gallery),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.photo_library),
+                  SizedBox(width: 8),
+                  Text('Gallery'),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+          ],
+        );
+      },
     );
 
-    if (result != null) {
-      try {
-        final localPath = result['localPath'];
-        
-        // Update profile photo path (no remote URL in local storage)
-        await _auth.currentUser?.updatePhotoURL(localPath);
+    if (source != null) {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: source);
+      
+      if (image != null) {
+        try {
+          // ✅ Usar serviço de cópias independentes para foto de perfil
+          final String? copiedImagePath = await _imageCopyService.createImageCopy(image.path);
+          
+          if (copiedImagePath != null) {
+            // Update profile photo path using independent copy
+            await _auth.currentUser?.updatePhotoURL(copiedImagePath);
 
-        // Save photo data in Firestore
-        if (_auth.currentUser?.uid != null) {
-          await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
-            'photoURL': localPath,
-            'photoLocalPath': localPath,
-          }, SetOptions(merge: true));
+            // Save photo data in Firestore
+            if (_auth.currentUser?.uid != null) {
+              await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
+                'photoURL': copiedImagePath,
+                'photoLocalPath': copiedImagePath,
+              }, SetOptions(merge: true));
+            }
+
+            setState(() {}); // Refresh the UI
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('✅ Foto de perfil guardada independentemente!')),
+                  ],
+                ),
+                backgroundColor: Colors.green[600],
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          } else {
+            // Fallback para usar o FileStorageService se a cópia falhar
+            final result = await _fileStorage.pickAndStoreImage(context: context);
+
+            if (result != null) {
+              final localPath = result['localPath'];
+              
+              await _auth.currentUser?.updatePhotoURL(localPath);
+
+              if (_auth.currentUser?.uid != null) {
+                await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
+                  'photoURL': localPath,
+                  'photoLocalPath': localPath,
+                }, SetOptions(merge: true));
+              }
+
+              setState(() {});
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(Icons.warning, color: Colors.white),
+                      SizedBox(width: 10),
+                      Expanded(child: Text('⚠️ Foto guardada com referência original')),
+                    ],
+                  ),
+                  backgroundColor: Colors.orange,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.white),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Erro ao atualizar foto de perfil.')),
+                ],
+              ),
+              backgroundColor: Colors.red[700],
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
-
-        setState(() {}); // Refresh the UI
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 10),
-                Expanded(child: Text('Profile picture updated successfully!')),
-              ],
-            ),
-            backgroundColor: Colors.green[600],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 10),
-                Expanded(child: Text('Unable to update profile picture. Please try again.')),
-              ],
-            ),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: Duration(seconds: 3),
-          ),
-        );
       }
     }
   }

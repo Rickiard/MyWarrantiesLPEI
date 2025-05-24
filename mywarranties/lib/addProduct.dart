@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'list.dart';
 import 'services/local_file_storage_service.dart';
+import 'services/image_copy_service.dart';
+import 'services/file_copy_service.dart';
 
 class AddProductPage extends StatefulWidget {
   @override
@@ -37,10 +39,10 @@ class _AddProductPageState extends State<AddProductPage> {
   List<String> _stores = [];
   final List<String> _timeUnits = ['days', 'months', 'years', 'lifetime'];
   String _selectedWarrantyUnit = 'days';
-  String _selectedExtensionUnit = 'days';
-
-  // Storage service
+  String _selectedExtensionUnit = 'days';  // Storage service
   final FileStorageService _fileStorage = FileStorageService();
+  final ImageCopyService _imageCopyService = ImageCopyService();
+  final FileCopyService _fileCopyService = FileCopyService();
   // File paths and URLs
   String? _productImagePath;
   String? _receiptPath;
@@ -139,28 +141,59 @@ class _AddProductPageState extends State<AddProductPage> {
     if (source != null) {
       await _pickImage(source);
     }
-  }
-  Future<void> _pickImage([ImageSource? source]) async {
+  }  Future<void> _pickImage([ImageSource? source]) async {
     if (source != null) {
       // Direct camera/gallery access
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: source);
       
       if (image != null) {
-        setState(() {
-          _productImage = File(image.path);
-          _productImagePath = image.path;
-          _productImageUrl = ''; // Empty string as we're not using Firebase Storage
-        });
+        // ✅ NOVA ABORDAGEM: Criar cópia independente em vez de usar caminho original
+        final String? copiedImagePath = await _imageCopyService.createImageCopy(image.path);
         
-        // Show success feedback
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Product image uploaded successfully!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        if (copiedImagePath != null) {
+          setState(() {
+            _productImage = File(copiedImagePath); // Usar cópia em vez do original
+            _productImagePath = copiedImagePath;   // Guardar caminho da cópia
+            _productImageUrl = ''; // Empty string as we're not using Firebase Storage
+          });
+          
+          // Show success feedback
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('✅ Imagem guardada independentemente!')),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          // Fallback para caminho original se a cópia falhar
+          setState(() {
+            _productImage = File(image.path);
+            _productImagePath = image.path;
+            _productImageUrl = '';
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.white),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('⚠️ Usando referência original (pode desaparecer se apagar da galeria)')),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
       }
     } else {
       // Fallback to file storage service for backward compatibility
@@ -184,14 +217,61 @@ class _AddProductPageState extends State<AddProductPage> {
       }
     }
   }
-
   Future<Map<String, String>?> _pickAndUploadDocument(String folder) async {
+    // Primeiro, usar o serviço original para escolher o ficheiro
     final result = await _fileStorage.pickAndStoreDocument(
       context: context,
       folder: folder,
     );
     
-    return result;
+    if (result != null && result['localPath'] != null) {
+      // ✅ NOVA LÓGICA: Criar cópia independente do documento
+      final String? copiedFilePath = await _fileCopyService.createFileCopy(
+        result['localPath']!,
+        folder, // 'receipts', 'warranties', 'documents'
+      );
+      
+      if (copiedFilePath != null) {
+        // Sucesso - usar cópia independente
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('✅ Documento guardado independentemente!')),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        
+        return {
+          'localPath': copiedFilePath,
+          'remoteUrl': '', // Não usamos URLs remotos
+        };
+      } else {
+        // Fallback - usar ficheiro original com aviso
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.warning, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('⚠️ Documento guardado com referência original')),
+              ],
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        
+        return result; // Usar resultado original
+      }
+    }
+    
+    return null;
   }
 
   Future<void> _submitForm() async {
@@ -907,34 +987,82 @@ class _AddProductPageState extends State<AddProductPage> {
       onResult(result);
     }
   }
-
   Future<Map<String, String>?> _pickImageAsDocument(String folder, ImageSource source) async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: source);
     
     if (image != null) {
       try {
-        final Directory appDir = await getApplicationDocumentsDirectory();
-        final String localDirPath = '${appDir.path}/$folder';
+        // ✅ Usar serviço de cópias independentes para documentos
+        final String? copiedImagePath = await _imageCopyService.createImageCopy(image.path);
         
-        final Directory localDir = Directory(localDirPath);
-        if (!await localDir.exists()) {
-          await localDir.create(recursive: true);
+        if (copiedImagePath != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('✅ Documento guardado independentemente!')),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          
+          return {
+            'localPath': copiedImagePath,
+            'remoteUrl': '',
+          };
+        } else {
+          // Fallback para método original se a cópia falhar
+          final Directory appDir = await getApplicationDocumentsDirectory();
+          final String localDirPath = '${appDir.path}/$folder';
+          
+          final Directory localDir = Directory(localDirPath);
+          if (!await localDir.exists()) {
+            await localDir.create(recursive: true);
+          }
+          
+          final String fileName = '${const Uuid().v4()}${path.extension(image.path)}';
+          final String localPath = '$localDirPath/$fileName';
+          
+          final File localFile = File(localPath);
+          await localFile.writeAsBytes(await image.readAsBytes());
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.white),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('⚠️ Documento guardado com referência original')),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          
+          return {
+            'localPath': localPath,
+            'remoteUrl': '',
+          };
         }
-        
-        final String fileName = '${const Uuid().v4()}${path.extension(image.path)}';
-        final String localPath = '$localDirPath/$fileName';
-        
-        final File localFile = File(localPath);
-        await localFile.writeAsBytes(await image.readAsBytes());
-        
-        return {
-          'localPath': localPath,
-          'remoteUrl': '',
-        };
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving image: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('Erro ao guardar documento: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     }

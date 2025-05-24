@@ -8,6 +8,8 @@ import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
 import 'dart:io';
 import 'services/local_file_storage_service.dart';
+import 'services/image_copy_service.dart';
+import 'services/file_copy_service.dart';
 
 class ProductInfoPage extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -30,9 +32,10 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
   List<String> _brands = [];
   List<String> _stores = [];
   final _warrantyUnitController = TextEditingController();
-  final _warrantyExtensionUnitController = TextEditingController();
-  final List<String> _timeUnits = ['days', 'months', 'years', 'lifetime'];
+  final _warrantyExtensionUnitController = TextEditingController();  final List<String> _timeUnits = ['days', 'months', 'years', 'lifetime'];
   final FileStorageService _fileStorage = FileStorageService();
+  final ImageCopyService _imageCopyService = ImageCopyService();
+  final FileCopyService _fileCopyService = FileCopyService();
 
   @override
   void initState() {
@@ -270,32 +273,89 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
     if (source != null) {
       await _pickImage(source);
     }
-  }
-  Future<void> _pickImage([ImageSource? source]) async {
+  }  Future<void> _pickImage([ImageSource? source]) async {
     if (source != null) {
       // Direct camera/gallery access
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: source);
       
       if (image != null) {
-        setState(() {
-          widget.product['imageUrl'] = ''; // Empty string as we're not using Firebase Storage
-          widget.product['imagePath'] = image.path;
-        });
+        // ✅ NOVA ABORDAGEM: Criar cópia independente em vez de usar caminho original
+        final String? copiedImagePath = await _imageCopyService.createImageCopy(image.path);
         
-        // Update in Firestore
-        final user = _auth.currentUser;
-        if (user != null) {
-          await _firestore
-              .collection('users')
-              .doc(user.uid)
-              .collection('products')
-              .doc(widget.product['id'])
-              .update({
-            'imageUrl': '', // Empty string as we're not using Firebase Storage
-            'imagePath': image.path,
-            'updatedAt': FieldValue.serverTimestamp(),
+        if (copiedImagePath != null) {
+          setState(() {
+            widget.product['imageUrl'] = ''; // Empty string as we're not using Firebase Storage
+            widget.product['imagePath'] = copiedImagePath; // Usar caminho da cópia
           });
+          
+          // Update in Firestore
+          final user = _auth.currentUser;
+          if (user != null) {
+            await _firestore
+                .collection('users')
+                .doc(user.uid)
+                .collection('products')
+                .doc(widget.product['id'])
+                .update({
+              'imageUrl': '', // Empty string as we're not using Firebase Storage
+              'imagePath': copiedImagePath, // Guardar caminho da cópia
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('✅ Imagem guardada independentemente!')),
+                  ],
+                ),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          // Fallback para caminho original se a cópia falhar
+          setState(() {
+            widget.product['imageUrl'] = '';
+            widget.product['imagePath'] = image.path;
+          });
+          
+          // Update in Firestore with original path
+          final user = _auth.currentUser;
+          if (user != null) {
+            await _firestore
+                .collection('users')
+                .doc(user.uid)
+                .collection('products')
+                .doc(widget.product['id'])
+                .update({
+              'imageUrl': '',
+              'imagePath': image.path,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.warning, color: Colors.white),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('⚠️ Usando referência original (pode desaparecer se apagar da galeria)')),
+                  ],
+                ),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
         }
       }
     } else {
@@ -339,7 +399,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
       });
     }
   }
-
   Future<void> _pickAndUploadDocument(String field) async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -348,46 +407,129 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
     String folderName = 'documents';
     if (field == 'receiptUrl') folderName = 'receipts';
     if (field == 'warrantyUrl') folderName = 'warranties';
-      final result = await _fileStorage.pickAndStoreDocument(context: context, folder: folderName);
-    if (result != null) {
-      final localPath = result['localPath'];
+    
+    // First, use the original service to pick the file
+    final result = await _fileStorage.pickAndStoreDocument(context: context, folder: folderName);
+    
+    if (result != null && result['localPath'] != null) {
+      // ✅ NEW LOGIC: Create independent copy of the document
+      final String? copiedFilePath = await _fileCopyService.createFileCopy(
+        result['localPath']!,
+        folderName, // 'receipts', 'warranties', 'documents'
+      );
       
-      // Determine the matching local path field
-      String pathField = field.replaceAll('Url', 'Path'); // receiptUrl -> receiptPath
-      
-      setState(() {
-        widget.product[field] = ''; // Empty string as we're not using Firebase Storage
-        widget.product[pathField] = localPath;
-      });
-      
-      // Update in Firestore
-      try {
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('products')
-            .doc(widget.product['id'])
-            .update({
-          field: '', // Empty string as we're not using Firebase Storage
-          pathField: localPath,
-          'updatedAt': FieldValue.serverTimestamp(),
+      if (copiedFilePath != null) {
+        // Success - use independent copy
+        String pathField = field.replaceAll('Url', 'Path'); // receiptUrl -> receiptPath
+        
+        setState(() {
+          widget.product[field] = ''; // Empty string as we're not using Firebase Storage
+          widget.product[pathField] = copiedFilePath; // Use copy path
         });
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.error_outline, color: Colors.white),
-                SizedBox(width: 10),
-                Expanded(child: Text('Error updating document in database.')),
-              ],
-            ),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        
+        // Update in Firestore
+        try {
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('products')
+              .doc(widget.product['id'])
+              .update({
+            field: '', // Empty string as we're not using Firebase Storage
+            pathField: copiedFilePath, // Save copy path
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('✅ Documento guardado independentemente!')),
+                  ],
+                ),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.white),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('Error updating document in database.')),
+                  ],
+                ),
+                backgroundColor: Colors.red[700],
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } else {
+        // Fallback - use original file with warning
+        String pathField = field.replaceAll('Url', 'Path');
+        
+        setState(() {
+          widget.product[field] = ''; // Empty string as we're not using Firebase Storage
+          widget.product[pathField] = result['localPath'];
+        });
+        
+        // Update in Firestore
+        try {
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('products')
+              .doc(widget.product['id'])
+              .update({
+            field: '', // Empty string as we're not using Firebase Storage
+            pathField: result['localPath'],
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.warning, color: Colors.white),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('⚠️ Documento guardado com referência original')),
+                  ],
+                ),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.white),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('Error updating document in database.')),
+                  ],
+                ),
+                backgroundColor: Colors.red[700],
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
       }
     }
   }
@@ -1162,9 +1304,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
       }
       onResult(result);
     }
-  }
-
-  Future<Map<String, String>?> _pickImageAsDocument(String field, ImageSource source) async {
+  }  Future<Map<String, String>?> _pickImageAsDocument(String field, ImageSource source) async {
     final user = _auth.currentUser;
     if (user == null) return null;
     
@@ -1173,56 +1313,115 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
     
     if (image != null) {
       try {
-        final Directory appDir = await getApplicationDocumentsDirectory();
-        String folderName = 'documents';
-        if (field == 'receiptUrl') folderName = 'receipts';
-        if (field == 'warrantyUrl') folderName = 'warranties';
+        // ✅ Usar serviço de cópias independentes para documentos
+        final String? copiedImagePath = await _imageCopyService.createImageCopy(image.path);
         
-        final String localDirPath = '${appDir.path}/$folderName';
-        final Directory localDir = Directory(localDirPath);
-        if (!await localDir.exists()) {
-          await localDir.create(recursive: true);
+        if (copiedImagePath != null) {
+          // Update the product data
+          setState(() {
+            widget.product[field] = '';
+            widget.product[field.replaceAll('Url', 'Path')] = copiedImagePath;
+          });
+
+          // Update in Firestore
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('products')
+              .doc(widget.product['id'])
+              .update({
+            field: '',
+            field.replaceAll('Url', 'Path'): copiedImagePath,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('✅ Documento guardado independentemente!')),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          
+          return {
+            'localPath': copiedImagePath,
+            'remoteUrl': '',
+          };
+        } else {
+          // Fallback para método original se a cópia falhar
+          final Directory appDir = await getApplicationDocumentsDirectory();
+          String folderName = 'documents';
+          if (field == 'receiptUrl') folderName = 'receipts';
+          if (field == 'warrantyUrl') folderName = 'warranties';
+          
+          final String localDirPath = '${appDir.path}/$folderName';
+          final Directory localDir = Directory(localDirPath);
+          if (!await localDir.exists()) {
+            await localDir.create(recursive: true);
+          }
+          
+          final String fileName = '${const Uuid().v4()}${path.extension(image.path)}';
+          final String localPath = '$localDirPath/$fileName';
+          
+          final File localFile = File(localPath);
+          await localFile.writeAsBytes(await image.readAsBytes());
+          
+          // Update the product data
+          setState(() {
+            widget.product[field] = '';
+            widget.product[field.replaceAll('Url', 'Path')] = localPath;
+          });
+
+          // Update in Firestore
+          await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('products')
+              .doc(widget.product['id'])
+              .update({
+            field: '',
+            field.replaceAll('Url', 'Path'): localPath,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.white),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('⚠️ Documento guardado com referência original')),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          
+          return {
+            'localPath': localPath,
+            'remoteUrl': '',
+          };
         }
-        
-        final String fileName = '${const Uuid().v4()}${path.extension(image.path)}';
-        final String localPath = '$localDirPath/$fileName';
-        
-        final File localFile = File(localPath);
-        await localFile.writeAsBytes(await image.readAsBytes());
-        
-        // Update the product data
-        setState(() {
-          widget.product[field] = '';
-          widget.product[field.replaceAll('Url', 'Path')] = localPath;
-        });
-
-        // Update in Firestore
-        await _firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('products')
-            .doc(widget.product['id'])
-            .update({
-          field: '',
-          field.replaceAll('Url', 'Path'): localPath,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Document uploaded successfully!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        
-        return {
-          'localPath': localPath,
-          'remoteUrl': '',
-        };
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving document: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text('Erro ao guardar documento: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     }

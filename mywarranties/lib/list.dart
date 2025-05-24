@@ -1030,9 +1030,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
             // Local file exists, use adaptive container for both horizontal and vertical images
             return Container(
               constraints: BoxConstraints(
-                maxWidth: 120,   // Increased to better accommodate horizontal images
+                maxWidth: 100,   // Increased to better accommodate horizontal images
                 maxHeight: 200,  // Maintains good height for vertical images
-                minWidth: 120,    // Increased minimum for better visibility
+                minWidth: 100,    // Increased minimum for better visibility
                 minHeight: 60,   // Reduced minimum height for horizontal images
               ),
               decoration: BoxDecoration(
@@ -1071,9 +1071,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     // Display placeholder with adaptive sizing for both horizontal and vertical orientations
     return Container(
       constraints: BoxConstraints(
-        maxWidth: 120,   // Increased to better accommodate horizontal images
+        maxWidth: 100,   // Increased to better accommodate horizontal images
         maxHeight: 200,  // Maintains good height for vertical images
-        minWidth: 120,    // Increased minimum for better visibility
+        minWidth: 100,    // Increased minimum for better visibility
         minHeight: 120,   // Reduced minimum height for horizontal images
       ),
       decoration: BoxDecoration(
