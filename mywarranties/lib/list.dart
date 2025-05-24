@@ -893,9 +893,8 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                                         style: GoogleFonts.poppins(
                                                           fontSize: 16,
                                                         ),
-                                                      ),
-                                                      Text(
-                                                        'Warranty Extension: ${product['warrantyExtension'] ?? 'None'}',
+                                                      ),                                                      Text(
+                                                        'Extension: ${product['warrantyExtension'] ?? 'None'}',
                                                         style: GoogleFonts.poppins(
                                                           fontSize: 16,
                                                         ),
@@ -1028,6 +1027,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
               snapshot.data == true) {            // Local file exists, use adaptive container for both horizontal and vertical images
             return Container(
               width: 150,
+              constraints: BoxConstraints(minHeight: 150),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
@@ -1061,8 +1061,8 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     }
   }  Widget _buildRemoteImageFallback(Map<String, dynamic> product) {    // Display placeholder with adaptive sizing for both horizontal and vertical orientations
     return Container(
-      width: 160,
-      constraints: BoxConstraints(maxHeight: 180),
+      width: 150,
+      constraints: BoxConstraints(minHeight: 150),
       decoration: BoxDecoration(
         color: Colors.grey.shade200,
         borderRadius: BorderRadius.circular(12),
