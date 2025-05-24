@@ -1024,14 +1024,17 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       // Return a FutureBuilder to check if file exists
       return FutureBuilder<bool>(
         future: localFile.exists(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done && 
+        builder: (context, snapshot) {          if (snapshot.connectionState == ConnectionState.done && 
               snapshot.hasData && 
               snapshot.data == true) {
-            // Local file exists, use Image.file
+            // Local file exists, use adaptive container for both horizontal and vertical images
             return Container(
-              width: 120,
-              height: 120,
+              constraints: BoxConstraints(
+                maxWidth: 120,   // Increased to better accommodate horizontal images
+                maxHeight: 200,  // Maintains good height for vertical images
+                minWidth: 120,    // Increased minimum for better visibility
+                minHeight: 60,   // Reduced minimum height for horizontal images
+              ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
@@ -1046,17 +1049,14 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                 borderRadius: BorderRadius.circular(12),
                 child: Image.file(
                   localFile,
-                  width: 120,
-                  height: 120,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {
                     // Fall back to remote URL if there's an error
                     return _buildRemoteImageFallback(product);
                   },
                 ),
               ),
-            );
-          } else {
+            );} else {
             // If local file doesn't exist, fall back to remote URL
             return _buildRemoteImageFallback(product);
           }
@@ -1067,12 +1067,15 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       return _buildRemoteImageFallback(product);
     }
   }
-
   Widget _buildRemoteImageFallback(Map<String, dynamic> product) {
-    // We no longer use remote URLs, so just display a placeholder
+    // Display placeholder with adaptive sizing for both horizontal and vertical orientations
     return Container(
-      width: 120,
-      height: 120,
+      constraints: BoxConstraints(
+        maxWidth: 120,   // Increased to better accommodate horizontal images
+        maxHeight: 200,  // Maintains good height for vertical images
+        minWidth: 120,    // Increased minimum for better visibility
+        minHeight: 120,   // Reduced minimum height for horizontal images
+      ),
       decoration: BoxDecoration(
         color: Colors.grey.shade200,
         borderRadius: BorderRadius.circular(12),

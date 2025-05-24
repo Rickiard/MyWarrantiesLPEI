@@ -534,9 +534,13 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [              GestureDetector(
-                onTap: _isEditing ? _showImageSourceDialog : null,
-                child: Container(
-                  height: 160,
+                onTap: _isEditing ? _showImageSourceDialog : null,                child: Container(
+                  constraints: BoxConstraints(
+                    maxWidth: 200,   // Increased to better accommodate horizontal images
+                    maxHeight: 300,  // Maintains good height for vertical images
+                    minWidth: 120,    // Increased minimum for better visibility
+                    minHeight: 80,   // Reduced minimum height for horizontal images
+                  ),
                   margin: EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -559,7 +563,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                               borderRadius: BorderRadius.circular(10),
                               child: Image.file(
                                 File(widget.product['imagePath']),
-                                fit: BoxFit.cover,
+                                fit: BoxFit.contain, // Changed to contain to avoid cropping
                                 width: double.infinity,
                                 height: double.infinity,
                                 errorBuilder: (context, error, stackTrace) {
@@ -619,8 +623,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                             ),
                             child: Icon(Icons.edit, color: Colors.white, size: 18),
                           ),
-                        ),
-                      if (_isEditing)
+                        ),                      if (_isEditing && widget.product['imagePath'] != null && widget.product['imagePath'].toString().isNotEmpty)
                         Positioned(
                           bottom: 12,
                           left: 12,
@@ -632,9 +635,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              widget.product['imagePath'] != null && widget.product['imagePath'].toString().isNotEmpty
-                                  ? 'Tap to change image'
-                                  : 'Tap to add image',
+                              'Tap to change image',
                               style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
                               textAlign: TextAlign.center,
                             ),

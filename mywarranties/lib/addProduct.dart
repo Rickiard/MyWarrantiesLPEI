@@ -405,9 +405,13 @@ class _AddProductPageState extends State<AddProductPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [              // Add Photo
               GestureDetector(
-                onTap: () => _showImageSourceDialog(),
-                child: Container(
-                  height: 160,
+                onTap: () => _showImageSourceDialog(),                child: Container(
+                  constraints: BoxConstraints(
+                    maxWidth: 200,   // Significantly increased for better horizontal image display
+                    maxHeight: 300,  // Increased height for better vertical image display
+                    minWidth: 120,   // Increased minimum for better visibility
+                    minHeight: 80,   // Increased minimum height
+                  ),
                   margin: EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -431,7 +435,7 @@ class _AddProductPageState extends State<AddProductPage> {
                               borderRadius: BorderRadius.circular(10),
                               child: Image.file(
                                 _productImage!, 
-                                fit: BoxFit.cover, 
+                                fit: BoxFit.contain, // Changed to contain to avoid cropping
                                 width: double.infinity, 
                                 height: double.infinity
                               ),
