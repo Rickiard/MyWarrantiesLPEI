@@ -912,12 +912,11 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                                                   ),
                                                 ),
                                               ],
-                                            ),
-                                            if (_isWarrantyExpiringSoon(product))
+                                            ),                                            if (_isWarrantyExpiringSoon(product))
                                               Padding(
                                                 padding: const EdgeInsets.only(top: 12.0),
                                                 child: Align(
-                                                  alignment: Alignment.centerLeft,
+                                                  alignment: Alignment.bottomRight,
                                                   child: Container(
                                                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                                     decoration: BoxDecoration(
@@ -1028,8 +1027,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
               snapshot.hasData && 
               snapshot.data == true) {            // Local file exists, use adaptive container for both horizontal and vertical images
             return Container(
-              width: 120,
-              height: 140,
+              width: 150,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
@@ -1063,8 +1061,8 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     }
   }  Widget _buildRemoteImageFallback(Map<String, dynamic> product) {    // Display placeholder with adaptive sizing for both horizontal and vertical orientations
     return Container(
-      width: 120,
-      height: 140,
+      width: 160,
+      constraints: BoxConstraints(maxHeight: 180),
       decoration: BoxDecoration(
         color: Colors.grey.shade200,
         borderRadius: BorderRadius.circular(12),

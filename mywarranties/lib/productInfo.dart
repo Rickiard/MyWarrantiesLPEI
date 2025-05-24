@@ -652,10 +652,12 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [              GestureDetector(
-                onTap: _isEditing ? _showImageSourceDialog : null,
-                child: Container(
+                onTap: _isEditing ? _showImageSourceDialog : null,                child: Container(
                   width: double.infinity,
-                  height: 300,
+                  constraints: BoxConstraints(
+                    minHeight: 200,
+                    maxHeight: 400,
+                  ),
                   margin: EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,

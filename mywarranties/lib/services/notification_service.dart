@@ -233,49 +233,58 @@ class NotificationService {
           await prefs.setBool('notify_expiry_day', notifyExpiryDayFirestore);
         }
       }
-      
-      // Get all warranties
-      final warrantiesSnapshot = await _firestore
+        // Get all products (not warranties)
+      final productsSnapshot = await _firestore
           .collection('users')
           .doc(_auth.currentUser!.uid)
-          .collection('warranties')
+          .collection('products')
           .get();
       
       final now = DateTime.now();
       
-      for (var doc in warrantiesSnapshot.docs) {
+      for (var doc in productsSnapshot.docs) {
         final data = doc.data();
-        final expiryDate = (data['expiryDate'] as Timestamp).toDate();
+        
+        // Calculate expiry date from product data
+        final expiryDate = calculateExpiryDate(
+          data['purchaseDate']?.toString() ?? '', 
+          data['warrantyPeriod']?.toString() ?? '',
+          data['warrantyExtension']?.toString()
+        );
+        
+        if (expiryDate == null) continue; // Skip lifetime warranties
+        
         final daysUntilExpiry = expiryDate.difference(now).inDays;
+        final productName = data['name'] ?? 'Unknown Product';
         
         // Check if we should notify based on days until expiry
         if (daysUntilExpiry == 30 && notifyThirtyDays) {
           await showNotification(
-            id: _thirtyDaysNotificationId,
+            id: _thirtyDaysNotificationId + doc.hashCode,
             title: 'Warranty Expiring Soon',
-            body: '${data['productName']} warranty expires in 30 days',
-            payload: json.encode({'warrantyId': doc.id}),
+            body: '$productName warranty expires in 30 days',
+            payload: json.encode({'productId': doc.id}),
           );
         } else if (daysUntilExpiry == 7 && notifySevenDays) {
           await showNotification(
-            id: _sevenDaysNotificationId,
+            id: _sevenDaysNotificationId + doc.hashCode,
             title: 'Warranty Expiring Soon',
-            body: '${data['productName']} warranty expires in 7 days',
-            payload: json.encode({'warrantyId': doc.id}),
+            body: '$productName warranty expires in 7 days',
+            payload: json.encode({'productId': doc.id}),
           );
         } else if (daysUntilExpiry == 1 && notifyOneDay) {
           await showNotification(
-            id: _oneDayNotificationId,
+            id: _oneDayNotificationId + doc.hashCode,
             title: 'Warranty Expiring Tomorrow',
-            body: '${data['productName']} warranty expires tomorrow',
-            payload: json.encode({'warrantyId': doc.id}),
+            body: '$productName warranty expires tomorrow',
+            payload: json.encode({'productId': doc.id}),
           );
         } else if (daysUntilExpiry == 0 && notifyExpiryDay) {
           await showNotification(
-            id: _expiryDayNotificationId,
+            id: _expiryDayNotificationId + doc.hashCode,
             title: 'Warranty Expired',
-            body: '${data['productName']} warranty has expired today',
-            payload: json.encode({'warrantyId': doc.id}),
+            body: '$productName warranty has expired today',
+            payload: json.encode({'productId': doc.id}),
           );
         }
       }

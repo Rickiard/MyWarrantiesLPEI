@@ -480,10 +480,12 @@ class _AddProductPageState extends State<AddProductPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,            children: [
               // Add Photo
               GestureDetector(
-                onTap: () => _showImageSourceDialog(),
-                child: Container(
+                onTap: () => _showImageSourceDialog(),                child: Container(
                   width: double.infinity,
-                  height: 300,
+                  constraints: BoxConstraints(
+                    minHeight: 200,
+                    maxHeight: 400,
+                  ),
                   margin: EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
