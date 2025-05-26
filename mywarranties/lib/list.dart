@@ -922,8 +922,6 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     }    // Return the main list view for other tabs
     return Stack(
       children: [
-        // Connection status banner
-        ConnectionStatusBanner(isConnected: _isConnected),
         Column(
           children: [
             SizedBox(height: _isSearchBarCollapsed ? 80 : 88),

@@ -69,10 +69,39 @@ class ConnectivityService {
   }
 }
 
-class NoInternetDialog extends StatelessWidget {
+class NoInternetDialog extends StatefulWidget {
   final VoidCallback? onRetry;
 
   const NoInternetDialog({Key? key, this.onRetry}) : super(key: key);
+
+  @override
+  State<NoInternetDialog> createState() => _NoInternetDialogState();
+}
+
+class _NoInternetDialogState extends State<NoInternetDialog> {
+  bool _isRetrying = false;
+
+  Future<void> _handleRetry() async {
+    if (_isRetrying || widget.onRetry == null) return;
+    
+    setState(() {
+      _isRetrying = true;
+    });
+    
+    // Add a small delay for better UX
+    await Future.delayed(Duration(milliseconds: 500));
+    
+    widget.onRetry!();
+    
+    // Reset the state after a delay
+    await Future.delayed(Duration(milliseconds: 1000));
+    
+    if (mounted) {
+      setState(() {
+        _isRetrying = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,17 +157,26 @@ class NoInternetDialog extends StatelessWidget {
         actions: [
           Center(
             child: ElevatedButton.icon(
-              onPressed: onRetry,
-              icon: Icon(Icons.refresh, color: Colors.white),
+              onPressed: _isRetrying ? null : _handleRetry,
+              icon: _isRetrying 
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Icon(Icons.refresh, color: Colors.white),
               label: Text(
-                'Try Again',
+                _isRetrying ? 'Checking...' : 'Try Again',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
+                backgroundColor: _isRetrying ? Colors.grey : Colors.blue,
                 padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
