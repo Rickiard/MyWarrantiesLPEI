@@ -10,6 +10,8 @@ import 'list.dart';
 import 'services/local_file_storage_service.dart';
 import 'services/image_copy_service.dart';
 import 'services/file_copy_service.dart';
+import 'services/background_service.dart';
+import 'services/notification_service.dart';
 
 class AddProductPage extends StatefulWidget {
   @override
@@ -290,10 +292,8 @@ class _AddProductPageState extends State<AddProductPage> {
       String? warrantyExtension;
       if (_isWarrantyExtensionActivated && _warrantyExtensionValueController.text.isNotEmpty) {
         warrantyExtension = '${_warrantyExtensionValueController.text} ${_selectedExtensionUnit}';
-      }
-
-      // Add to Firestore
-      await FirebaseFirestore.instance
+      }      // Add to Firestore
+      final docRef = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('products')
@@ -322,6 +322,28 @@ class _AddProductPageState extends State<AddProductPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      // Trigger notification check for the new product
+      final productData = {
+        'name': _nameController.text,
+        'category': _categoryController.text,
+        'price': _priceController.text,
+        'purchaseDate': _purchaseDateController.text,
+        'warrantyPeriod': warrantyPeriod,
+        'warrantyUnit': _selectedWarrantyUnit,
+        'warrantyExtension': warrantyExtension,
+        'warrantyExtensionUnit': _isWarrantyExtensionActivated ? _selectedExtensionUnit : null,
+        'storeDetails': _storeDetailsController.text,
+        'brand': _brandController.text,
+        'notes': _notesController.text,
+      };
+      
+      // Notify background service about the new product
+      await BackgroundService.notifyProductChanged(
+        productId: docRef.id,
+        productData: productData,
+        isNewProduct: true,
+      );
 
       // Navigate to list page and remove all previous routes
       Navigator.pushAndRemoveUntil(

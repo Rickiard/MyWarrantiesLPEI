@@ -10,6 +10,7 @@ import 'dart:io';
 import 'services/local_file_storage_service.dart';
 import 'services/image_copy_service.dart';
 import 'services/file_copy_service.dart';
+import 'services/background_service.dart';
 
 class ProductInfoPage extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -1160,7 +1161,6 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
       ),
     );
   }
-
   Future<void> _saveProduct() async {
     setState(() => _isLoading = true);
     try {
@@ -1173,6 +1173,13 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
           .collection('products')
           .doc(widget.product['id'])
           .update(widget.product);
+
+      // Trigger notification check for the updated product
+      await BackgroundService.notifyProductChanged(
+        productId: widget.product['id'],
+        productData: widget.product,
+        isNewProduct: false,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

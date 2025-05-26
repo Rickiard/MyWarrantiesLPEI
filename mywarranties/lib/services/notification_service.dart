@@ -195,17 +195,12 @@ class NotificationService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('nextWarrantyCheck', tomorrow.toIso8601String());
   }
-
   Future<void> checkWarrantiesExpiringSoon() async {
     if (_auth.currentUser == null) return;
-
+    
     try {
       // Load user notification preferences
       final prefs = await SharedPreferences.getInstance();
-      final notifyThirtyDays = prefs.getBool('notify_thirty_days') ?? true;
-      final notifySevenDays = prefs.getBool('notify_seven_days') ?? true;
-      final notifyOneDay = prefs.getBool('notify_one_day') ?? true;
-      final notifyExpiryDay = prefs.getBool('notify_expiry_day') ?? true;
       
       // Get user's notification settings from Firestore if available
       final userDoc = _firestore.collection('users').doc(_auth.currentUser!.uid);
@@ -244,54 +239,163 @@ class NotificationService {
       
       for (var doc in productsSnapshot.docs) {
         final data = doc.data();
+        final productId = doc.id;
         
-        // Calculate expiry date from product data
-        final expiryDate = calculateExpiryDate(
-          data['purchaseDate']?.toString() ?? '', 
-          data['warrantyPeriod']?.toString() ?? '',
-          data['warrantyExtension']?.toString()
-        );
-        
-        if (expiryDate == null) continue; // Skip lifetime warranties
-        
-        final daysUntilExpiry = expiryDate.difference(now).inDays;
-        final productName = data['name'] ?? 'Unknown Product';
-        
-        // Check if we should notify based on days until expiry
-        if (daysUntilExpiry == 30 && notifyThirtyDays) {
-          await showNotification(
-            id: _thirtyDaysNotificationId + doc.hashCode,
-            title: 'Warranty Expiring Soon',
-            body: '$productName warranty expires in 30 days',
-            payload: json.encode({'productId': doc.id}),
-          );
-        } else if (daysUntilExpiry == 7 && notifySevenDays) {
-          await showNotification(
-            id: _sevenDaysNotificationId + doc.hashCode,
-            title: 'Warranty Expiring Soon',
-            body: '$productName warranty expires in 7 days',
-            payload: json.encode({'productId': doc.id}),
-          );
-        } else if (daysUntilExpiry == 1 && notifyOneDay) {
-          await showNotification(
-            id: _oneDayNotificationId + doc.hashCode,
-            title: 'Warranty Expiring Tomorrow',
-            body: '$productName warranty expires tomorrow',
-            payload: json.encode({'productId': doc.id}),
-          );
-        } else if (daysUntilExpiry == 0 && notifyExpiryDay) {
-          await showNotification(
-            id: _expiryDayNotificationId + doc.hashCode,
-            title: 'Warranty Expired',
-            body: '$productName warranty has expired today',
-            payload: json.encode({'productId': doc.id}),
-          );
-        }
+        await _checkAndScheduleNotificationsForProduct(productId, data, now);
       }
     } catch (e) {
       print('Error checking warranties: $e');
     }
   }
+  
+  // New method to check a single product's warranty 
+  // This is called when a product is added or updated
+  Future<void> checkSingleProductWarranty({
+    required String productId, 
+    required Map<String, dynamic> productData,
+    bool isNewProduct = false
+  }) async {
+    if (_auth.currentUser == null) return;
+    
+    try {
+      final now = DateTime.now();
+      
+      // Cancel any existing notifications for this product if it's being updated
+      if (!isNewProduct) {
+        await _cancelProductNotifications(productId);
+      }
+      
+      // Schedule new notifications based on current settings
+      await _checkAndScheduleNotificationsForProduct(productId, productData, now);
+      
+      print('Notifications checked for product $productId');
+    } catch (e) {
+      print('Error checking warranty for single product: $e');
+    }
+  }
+  
+  // Helper method to check and schedule notifications for a specific product
+  Future<void> _checkAndScheduleNotificationsForProduct(
+    String productId,
+    Map<String, dynamic> data,
+    DateTime now
+  ) async {
+    // Load user notification preferences
+    final prefs = await SharedPreferences.getInstance();
+    final notifyThirtyDays = prefs.getBool('notify_thirty_days') ?? true;
+    final notifySevenDays = prefs.getBool('notify_seven_days') ?? true;
+    final notifyOneDay = prefs.getBool('notify_one_day') ?? true;
+    final notifyExpiryDay = prefs.getBool('notify_expiry_day') ?? true;
+    
+    // Calculate expiry date from product data
+    final expiryDate = calculateExpiryDate(
+      data['purchaseDate']?.toString() ?? '', 
+      data['warrantyPeriod']?.toString() ?? '',
+      data['warrantyExtension']?.toString()
+    );
+    
+    if (expiryDate == null) return; // Skip lifetime warranties
+    
+    final daysUntilExpiry = expiryDate.difference(now).inDays;
+    final productName = data['name'] ?? 'Unknown Product';
+    
+    // Check if we should notify based on days until expiry
+    if (daysUntilExpiry <= 30 && daysUntilExpiry > 7 && notifyThirtyDays) {
+      // Schedule 30-day notification
+      if (daysUntilExpiry == 30) {
+        // If exactly 30 days, show now
+        await showNotification(
+          id: _thirtyDaysNotificationId + productId.hashCode,
+          title: 'Warranty Expiring Soon',
+          body: '$productName warranty expires in 30 days',
+          payload: json.encode({'productId': productId}),
+        );
+      } else if (daysUntilExpiry > 30) {
+        // If more than 30 days, schedule for future
+        final notificationDate = expiryDate.subtract(const Duration(days: 30));
+        await showNotification(
+          id: _thirtyDaysNotificationId + productId.hashCode,
+          title: 'Warranty Expiring Soon',
+          body: '$productName warranty expires in 30 days',
+          payload: json.encode({'productId': productId}),
+          scheduledDate: notificationDate,
+        );
+      }
+    }
+    
+    if (daysUntilExpiry <= 7 && daysUntilExpiry > 1 && notifySevenDays) {
+      // Schedule 7-day notification
+      if (daysUntilExpiry == 7) {
+        // If exactly 7 days, show now
+        await showNotification(
+          id: _sevenDaysNotificationId + productId.hashCode,
+          title: 'Warranty Expiring Soon',
+          body: '$productName warranty expires in 7 days',
+          payload: json.encode({'productId': productId}),
+        );
+      } else if (daysUntilExpiry > 7) {
+        // If more than 7 days, schedule for future
+        final notificationDate = expiryDate.subtract(const Duration(days: 7));
+        await showNotification(
+          id: _sevenDaysNotificationId + productId.hashCode,
+          title: 'Warranty Expiring Soon',
+          body: '$productName warranty expires in 7 days',
+          payload: json.encode({'productId': productId}),
+          scheduledDate: notificationDate,
+        );
+      }
+    }
+    
+    if (daysUntilExpiry <= 1 && daysUntilExpiry > 0 && notifyOneDay) {
+      // Schedule 1-day notification
+      if (daysUntilExpiry == 1) {
+        // If exactly 1 day, show now
+        await showNotification(
+          id: _oneDayNotificationId + productId.hashCode,
+          title: 'Warranty Expiring Tomorrow',
+          body: '$productName warranty expires tomorrow',
+          payload: json.encode({'productId': productId}),
+        );
+      } else if (daysUntilExpiry > 1) {
+        // If more than 1 day, schedule for future
+        final notificationDate = expiryDate.subtract(const Duration(days: 1));
+        await showNotification(
+          id: _oneDayNotificationId + productId.hashCode,
+          title: 'Warranty Expiring Tomorrow',
+          body: '$productName warranty expires tomorrow',
+          payload: json.encode({'productId': productId}),
+          scheduledDate: notificationDate,
+        );
+      }
+    }
+    
+    if (daysUntilExpiry == 0 && notifyExpiryDay) {
+      await showNotification(
+        id: _expiryDayNotificationId + productId.hashCode,
+        title: 'Warranty Expired',
+        body: '$productName warranty has expired today',
+        payload: json.encode({'productId': productId}),
+      );
+    } else if (daysUntilExpiry > 0 && notifyExpiryDay) {
+      // Schedule for the exact expiry date
+      await showNotification(
+        id: _expiryDayNotificationId + productId.hashCode,
+        title: 'Warranty Expired',
+        body: '$productName warranty has expired today',
+        payload: json.encode({'productId': productId}),
+        scheduledDate: expiryDate,
+      );
+    }
+  }
+  
+  // Helper method to cancel existing notifications for a product
+  Future<void> _cancelProductNotifications(String productId) async {
+    await cancelNotification(_thirtyDaysNotificationId + productId.hashCode);
+    await cancelNotification(_sevenDaysNotificationId + productId.hashCode);
+    await cancelNotification(_oneDayNotificationId + productId.hashCode);
+    await cancelNotification(_expiryDayNotificationId + productId.hashCode);
+  }
+  
   DateTime? calculateExpiryDate(String purchaseDate, String warrantyPeriod, String? warrantyExtension) {
     try {
       if (warrantyPeriod.toLowerCase() == 'lifetime') return null;
