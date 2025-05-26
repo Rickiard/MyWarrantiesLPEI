@@ -1027,8 +1027,7 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
         }
       }
     }
-  }
-  // Helper method to get profile photo path from Firestore if not in Auth
+  }  // Helper method to get profile photo path from Firestore if not in Auth
   Future<String?> _getProfilePhotoUrl() async {
     if (_auth.currentUser?.photoURL != null && _auth.currentUser!.photoURL!.isNotEmpty) {
       return _auth.currentUser!.photoURL;
@@ -1037,6 +1036,35 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
       final doc = await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).get();
       if (doc.exists && doc.data()?['photoLocalPath'] != null) {
         return doc.data()!['photoLocalPath'] as String;
+      }
+    }
+    return null;
+  }
+
+  // Helper method to check if an image file exists and is valid
+  bool _doesFileExist(String? path) {
+    if (path == null || path.isEmpty) return false;
+    try {
+      return File(path).existsSync();
+    } catch (e) {
+      print('Error checking if file exists: $e');
+      return false;
+    }
+  }
+
+  // Helper method to determine if the placeholder should be shown
+  bool _shouldShowPlaceholder(String? path) {
+    return !_doesFileExist(path);
+  }
+
+  // Helper method to build profile image
+  ImageProvider? _buildProfileImage(String? path) {
+    if (_doesFileExist(path)) {
+      try {
+        return FileImage(File(path!));
+      } catch (e) {
+        print('Error loading profile image: $e');
+        return null;
       }
     }
     return null;
@@ -1082,10 +1110,8 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                             children: [                              CircleAvatar(
                                 radius: 60,
                                 backgroundColor: Colors.white,
-                                backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-                                    ? FileImage(File(photoUrl))
-                                    : null,
-                                child: (photoUrl == null || photoUrl.isEmpty)
+                                backgroundImage: _buildProfileImage(photoUrl),
+                                child: _shouldShowPlaceholder(photoUrl)
                                     ? Icon(
                                         Icons.person,
                                         size: 80,
