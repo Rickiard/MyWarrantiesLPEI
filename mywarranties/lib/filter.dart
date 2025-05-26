@@ -33,6 +33,12 @@ class _FilterPageState extends State<FilterPage> {
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
   
+  // Expiry date range controllers
+  DateTime? _startExpiryDate;
+  DateTime? _endExpiryDate;
+  final _startExpiryDateController = TextEditingController();
+  final _endExpiryDateController = TextEditingController();
+  
   // Warranty period range controllers
   final _minWarrantyPeriodController = TextEditingController();
   final _maxWarrantyPeriodController = TextEditingController();
@@ -49,10 +55,10 @@ class _FilterPageState extends State<FilterPage> {
   List<String> _selectedCategories = [];
   List<String> _selectedBrands = [];
   List<String> _selectedStores = [];
-  
-  // Sorting options
+    // Sorting options
   String _selectedSortField = 'name';
   bool _sortAscending = true;
+  bool _isSortingEnabled = false;
   
   // Available options
   List<String> _categories = [];
@@ -70,6 +76,8 @@ class _FilterPageState extends State<FilterPage> {
     {'value': 'category', 'label': 'Category', 'icon': Icons.category},
     {'value': 'brand', 'label': 'Brand', 'icon': Icons.branding_watermark},
     {'value': 'storeDetails', 'label': 'Store', 'icon': Icons.store},
+    {'value': 'expiryDate', 'label': 'Expiry Date', 'icon': Icons.event_busy},
+    {'value': 'lastUpdated', 'label': 'Last Updated', 'icon': Icons.update},
   ];
 
   // Time units
@@ -125,6 +133,16 @@ class _FilterPageState extends State<FilterPage> {
         if (widget.activeFilters!['endDate']?.isNotEmpty ?? false) {
           _endDateController.text = widget.activeFilters!['endDate'] ?? '';
           _endDate = DateTime.tryParse(widget.activeFilters!['endDate'] ?? '');
+        }
+        
+        // Load expiry date range
+        if (widget.activeFilters!['startExpiryDate']?.isNotEmpty ?? false) {
+          _startExpiryDateController.text = widget.activeFilters!['startExpiryDate'] ?? '';
+          _startExpiryDate = DateTime.tryParse(widget.activeFilters!['startExpiryDate'] ?? '');
+        }
+        if (widget.activeFilters!['endExpiryDate']?.isNotEmpty ?? false) {
+          _endExpiryDateController.text = widget.activeFilters!['endExpiryDate'] ?? '';
+          _endExpiryDate = DateTime.tryParse(widget.activeFilters!['endExpiryDate'] ?? '');
         }
         
         // Load warranty period range with lifetime handling
@@ -189,10 +207,10 @@ class _FilterPageState extends State<FilterPage> {
         if (widget.activeFilters!['stores']?.isNotEmpty ?? false) {
           _selectedStores = widget.activeFilters!['stores']!.split(',');
         }
-        
-        // Load sorting options
+          // Load sorting options
         _selectedSortField = widget.activeFilters!['sortField'] ?? 'name';
         _sortAscending = widget.activeFilters!['sortDirection'] == 'desc' ? false : true;
+        _isSortingEnabled = widget.activeFilters!['sortingEnabled'] == 'true';
         
         _hasActiveFilters = widget.activeFilters!.values.any((value) => value.isNotEmpty);
       });
@@ -225,6 +243,36 @@ class _FilterPageState extends State<FilterPage> {
       setState(() {
         _endDate = picked;
         _endDateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+      });
+    }
+  }
+
+  Future<void> _selectStartExpiryDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _startExpiryDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _startExpiryDate = picked;
+        _startExpiryDateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+      });
+    }
+  }
+
+  Future<void> _selectEndExpiryDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _endExpiryDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _endExpiryDate = picked;
+        _endExpiryDateController.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
       });
     }
   }
@@ -310,12 +358,35 @@ class _FilterPageState extends State<FilterPage> {
           }
         }
 
+        // Validate expiry date range
+        String startExpiryDate = _startExpiryDateController.text;
+        String endExpiryDate = _endExpiryDateController.text;
+        if (startExpiryDate.isNotEmpty && endExpiryDate.isNotEmpty) {
+          final start = DateTime.tryParse(startExpiryDate);
+          final end = DateTime.tryParse(endExpiryDate);
+          if (start != null && end != null && start.isAfter(end)) {
+            // Invalid expiry date range, reset dates
+            startExpiryDate = '';
+            endExpiryDate = '';
+            // Show error message
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Invalid expiry date range: Start date must be before end date'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+        }
+
         final filters = {
           'name': _nameController.text.trim(),
           'minPrice': minPrice,
           'maxPrice': maxPrice,
           'startDate': startDate,
           'endDate': endDate,
+          'startExpiryDate': startExpiryDate,
+          'endExpiryDate': endExpiryDate,
           'minWarrantyPeriod': minWarrantyPeriod,
           'maxWarrantyPeriod': maxWarrantyPeriod,
           'minWarrantyExtension': minWarrantyExtension,
@@ -323,8 +394,9 @@ class _FilterPageState extends State<FilterPage> {
           'categories': _selectedCategories.isEmpty ? '' : _selectedCategories.join(','),
           'brands': _selectedBrands.isEmpty ? '' : _selectedBrands.join(','),
           'stores': _selectedStores.isEmpty ? '' : _selectedStores.join(','),
-          'sortField': _selectedSortField,
-          'sortDirection': _sortAscending ? 'asc' : 'desc',
+          'sortField': _isSortingEnabled ? _selectedSortField : '',
+          'sortDirection': _isSortingEnabled ? (_sortAscending ? 'asc' : 'desc') : '',
+          'sortingEnabled': _isSortingEnabled ? 'true' : 'false',
         };
 
         // Check if any filters are active
@@ -374,6 +446,8 @@ class _FilterPageState extends State<FilterPage> {
       _maxPriceController.text = '';
       _startDateController.text = '';
       _endDateController.text = '';
+      _startExpiryDateController.text = '';
+      _endExpiryDateController.text = '';
       _minWarrantyPeriodController.text = '';
       _maxWarrantyPeriodController.text = '';
       _minWarrantyExtensionController.text = '';
@@ -382,15 +456,16 @@ class _FilterPageState extends State<FilterPage> {
       // Reset date range
       _startDate = null;
       _endDate = null;
+      _startExpiryDate = null;
+      _endExpiryDate = null;
 
       // Clear multiple selections
       _selectedCategories = [];
       _selectedBrands = [];
-      _selectedStores = [];
-
-      // Reset sorting options to defaults
+      _selectedStores = [];      // Reset sorting options to defaults
       _selectedSortField = 'name';
       _sortAscending = true;
+      _isSortingEnabled = false;
 
       // Reset active filters flag
       _hasActiveFilters = false;
@@ -403,15 +478,18 @@ class _FilterPageState extends State<FilterPage> {
       'maxPrice': '',
       'startDate': '',
       'endDate': '',
+      'startExpiryDate': '',
+      'endExpiryDate': '',
       'minWarrantyPeriod': '',
       'maxWarrantyPeriod': '',
       'minWarrantyExtension': '',
       'maxWarrantyExtension': '',
       'categories': '',
       'brands': '',
-      'stores': '',
+      'stores': '',      
       'sortField': 'name',
       'sortDirection': 'asc',
+      'sortingEnabled': 'false',
     });
 
     // Show a snackbar indicating filters were cleared
@@ -439,6 +517,10 @@ class _FilterPageState extends State<FilterPage> {
     // Dispose date range controllers
     _startDateController.dispose();
     _endDateController.dispose();
+    
+    // Dispose expiry date range controllers
+    _startExpiryDateController.dispose();
+    _endExpiryDateController.dispose();
     
     // Dispose warranty period range controllers
     _minWarrantyPeriodController.dispose();
@@ -543,6 +625,11 @@ class _FilterPageState extends State<FilterPage> {
               _buildDateRangeFields(),
               const SizedBox(height: 24),
 
+              _buildSectionHeader('Expiry Date Range'),
+              const SizedBox(height: 8),
+              _buildExpiryDateRangeFields(),
+              const SizedBox(height: 24),
+
               _buildSectionHeader('Warranty Period Range'),
               const SizedBox(height: 8),
               _buildWarrantyRangeFields(
@@ -595,75 +682,108 @@ class _FilterPageState extends State<FilterPage> {
                 ),
                 child: Column(
                   children: [
+                    // Enable/Disable Sorting Toggle
                     Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedSortField,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: Colors.grey.shade50,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
+                      child: Row(
+                        children: [
+                          Icon(Icons.sort, color: Colors.blue),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Enable Sorting',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          Switch(
+                            value: _isSortingEnabled,
+                            onChanged: (value) {
+                              setState(() {
+                                _isSortingEnabled = value;
+                              });
+                            },
+                            activeColor: Colors.blue,
                           ),
+                        ],
+                      ),
+                    ),
+                    
+                    // Show sorting options only if sorting is enabled
+                    if (_isSortingEnabled) ...[
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedSortField,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Colors.grey.shade300),
+                            ),
+                          ),
+                          items: _sortFields.map((field) {
+                            return DropdownMenuItem<String>(
+                              value: field['value'],
+                              child: Row(
+                                children: [
+                                  Icon(field['icon'], color: Colors.blue, size: 20),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    field['label']!,
+                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedSortField = value ?? 'name';
+                            });
+                          },
                         ),
-                        items: _sortFields.map((field) {
-                          return DropdownMenuItem<String>(
-                            value: field['value'],
-                            child: Row(
-                              children: [
-                                Icon(field['icon'], color: Colors.blue, size: 20),
-                                const SizedBox(width: 12),
-                                Text(
-                                  field['label']!,
-                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _buildSortDirectionButton(
+                                  true,
+                                  Icons.arrow_upward,
+                                  'Ascending',
+                                  isLeft: true,
                                 ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedSortField = value ?? 'name';
-                          });
-                        },
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildSortDirectionButton(
-                                true,
-                                Icons.arrow_upward,
-                                'Ascending',
-                                isLeft: true,
                               ),
-                            ),
-                            Expanded(
-                              child: _buildSortDirectionButton(
-                                false,
-                                Icons.arrow_downward,
-                                'Descending',
-                                isLeft: false,
+                              Expanded(
+                                child: _buildSortDirectionButton(
+                                  false,
+                                  Icons.arrow_downward,
+                                  'Descending',
+                                  isLeft: false,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -801,383 +921,532 @@ class _FilterPageState extends State<FilterPage> {
         ),
       ),
     );
-  }
-
-  Widget _buildRangeFields(
+  }  Widget _buildRangeFields(
     TextEditingController minController,
     TextEditingController maxController,
     String minLabel,
     String maxLabel,
   ) {
-    // Use LayoutBuilder para adaptar-se ao espaço disponível
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Em telas muito pequenas, empilhe os campos verticalmente
-        if (constraints.maxWidth < 400) {
-          return Column(
-            children: [
-              TextFormField(
-                controller: minController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: minLabel,
-                  labelStyle: TextStyle(color: Colors.grey[700]),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  helperText: ' ', // Adds space for error message
-                ),
-                validator: (value) {
-                  if (value != null && value.isNotEmpty) {
-                    // Check if input is a valid number
-                    if (double.tryParse(value) == null) {
-                      return 'Enter a valid number';
-                    }
-                    
-                    // Check if input is non-negative
-                    if (double.parse(value) < 0) {
-                      return 'Must be non-negative';
-                    }
-                    
-                    // Check if min is less than max (if max has a value)
-                    if (maxController.text.isNotEmpty) {
-                      final double? maxValue = double.tryParse(maxController.text);
-                      if (maxValue != null && double.parse(value) > maxValue) {
-                        return 'Min must be ≤ Max';
-                      }
-                    }
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: maxController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: maxLabel,
-                  labelStyle: TextStyle(color: Colors.grey[700]),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  helperText: ' ', // Adds space for error message
-                ),
-                validator: (value) {
-                  if (value != null && value.isNotEmpty) {
-                    // Check if input is a valid number
-                    if (double.tryParse(value) == null) {
-                      return 'Enter a valid number';
-                    }
-                    
-                    // Check if input is non-negative
-                    if (double.parse(value) < 0) {
-                      return 'Must be non-negative';
-                    }
-                    
-                    // Check if max is greater than min (if min has a value)
-                    if (minController.text.isNotEmpty) {
-                      final double? minValue = double.tryParse(minController.text);
-                      if (minValue != null && double.parse(value) < minValue) {
-                        return 'Max must be ≥ Min';
-                      }
-                    }
-                  }
-                  return null;
-                },
-              ),
-            ],
-          );
-        } else {
-          // Em telas maiores, mantenha o layout horizontal
-          return Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: minController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    labelText: minLabel,
-                    labelStyle: TextStyle(color: Colors.grey[700]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    helperText: ' ', // Adds space for error message
-                  ),
-                  validator: (value) {
-                    if (value != null && value.isNotEmpty) {
-                      // Check if input is a valid number
-                      if (double.tryParse(value) == null) {
-                        return 'Enter a valid number';
-                      }
-                      
-                      // Check if input is non-negative
-                      if (double.parse(value) < 0) {
-                        return 'Must be non-negative';
-                      }
-                      
-                      // Check if min is less than max (if max has a value)
-                      if (maxController.text.isNotEmpty) {
-                        final double? maxValue = double.tryParse(maxController.text);
-                        if (maxValue != null && double.parse(value) > maxValue) {
-                          return 'Min must be ≤ Max';
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Input fields with clean styling
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 400) {
+                return Column(
+                  children: [
+                    TextFormField(
+                      controller: minController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        labelText: minLabel,
+                        labelStyle: TextStyle(color: Colors.grey[700]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        prefixIcon: const Icon(Icons.attach_money),
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      ),
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty) {
+                          if (double.tryParse(value) == null) {
+                            return 'Enter a valid number';
+                          }
+                          if (double.parse(value) < 0) {
+                            return 'Must be non-negative';
+                          }
+                          if (maxController.text.isNotEmpty) {
+                            final double? maxValue = double.tryParse(maxController.text);
+                            if (maxValue != null && double.parse(value) > maxValue) {
+                              return 'Min must be ≤ Max';
+                            }
+                          }
                         }
-                      }
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: TextFormField(
-                  controller: maxController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    labelText: maxLabel,
-                    labelStyle: TextStyle(color: Colors.grey[700]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
+                        return null;
+                      },
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    helperText: ' ', // Adds space for error message
-                  ),
-                  validator: (value) {
-                    if (value != null && value.isNotEmpty) {
-                      // Check if input is a valid number
-                      if (double.tryParse(value) == null) {
-                        return 'Enter a valid number';
-                      }
-                      
-                      // Check if input is non-negative
-                      if (double.parse(value) < 0) {
-                        return 'Must be non-negative';
-                      }
-                      
-                      // Check if max is greater than min (if min has a value)
-                      if (minController.text.isNotEmpty) {
-                        final double? minValue = double.tryParse(minController.text);
-                        if (minValue != null && double.parse(value) < minValue) {
-                          return 'Max must be ≥ Min';
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: maxController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        labelText: maxLabel,
+                        labelStyle: TextStyle(color: Colors.grey[700]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        prefixIcon: const Icon(Icons.attach_money),
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      ),
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty) {
+                          if (double.tryParse(value) == null) {
+                            return 'Enter a valid number';
+                          }
+                          if (double.parse(value) < 0) {
+                            return 'Must be non-negative';
+                          }
+                          if (minController.text.isNotEmpty) {
+                            final double? minValue = double.tryParse(minController.text);
+                            if (minValue != null && double.parse(value) < minValue) {
+                              return 'Max must be ≥ Min';
+                            }
+                          }
                         }
-                      }
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
-          );
-        }
-      },
+                        return null;
+                      },
+                    ),
+                  ],
+                );
+              } else {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: minController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          labelText: minLabel,
+                          labelStyle: TextStyle(color: Colors.grey[700]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          prefixIcon: const Icon(Icons.attach_money),
+                          errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty) {
+                            if (double.tryParse(value) == null) {
+                              return 'Enter a valid number';
+                            }
+                            if (double.parse(value) < 0) {
+                              return 'Must be non-negative';
+                            }
+                            if (maxController.text.isNotEmpty) {
+                              final double? maxValue = double.tryParse(maxController.text);
+                              if (maxValue != null && double.parse(value) > maxValue) {
+                                return 'Min must be ≤ Max';
+                              }
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextFormField(
+                        controller: maxController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          labelText: maxLabel,
+                          labelStyle: TextStyle(color: Colors.grey[700]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          prefixIcon: const Icon(Icons.attach_money),
+                          errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty) {
+                            if (double.tryParse(value) == null) {
+                              return 'Enter a valid number';
+                            }
+                            if (double.parse(value) < 0) {
+                              return 'Must be non-negative';
+                            }
+                            if (minController.text.isNotEmpty) {
+                              final double? minValue = double.tryParse(minController.text);
+                              if (minValue != null && double.parse(value) < minValue) {
+                                return 'Max must be ≥ Min';
+                              }
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              }
+            },
+          ),
+        ],
+      ),
     );
-  }
-
-  Widget _buildDateRangeFields() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Em telas muito pequenas, empilhe os campos verticalmente
-        if (constraints.maxWidth < 400) {
-          return Column(
-            children: [
-              TextFormField(
-                controller: _startDateController,
-                readOnly: true,
-                onTap: () => _selectStartDate(context),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'From',
-                  labelStyle: TextStyle(color: Colors.grey[700]),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  suffixIcon: const Icon(Icons.calendar_today, size: 20),
-                  errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  helperText: ' ', // Adds space for error message
-                ),
-                validator: (value) {
-                  if (value != null && value.isNotEmpty && _endDateController.text.isNotEmpty) {
-                    // Check if start date is before end date
-                    final startDate = DateTime.tryParse(value);
-                    final endDate = DateTime.tryParse(_endDateController.text);
-                    
-                    if (startDate != null && endDate != null) {
-                      if (startDate.isAfter(endDate)) {
-                        return 'Start date must be before end date';
-                      }
-                    }
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _endDateController,
-                readOnly: true,
-                onTap: () => _selectEndDate(context),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  labelText: 'To',
-                  labelStyle: TextStyle(color: Colors.grey[700]),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  suffixIcon: const Icon(Icons.calendar_today, size: 20),
-                  errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  helperText: ' ', // Adds space for error message
-                ),
-                validator: (value) {
-                  if (value != null && value.isNotEmpty && _startDateController.text.isNotEmpty) {
-                    // Check if end date is after start date
-                    final endDate = DateTime.tryParse(value);
-                    final startDate = DateTime.tryParse(_startDateController.text);
-                    
-                    if (startDate != null && endDate != null) {
-                      if (endDate.isBefore(startDate)) {
-                        return 'End date must be after start date';
-                      }
-                    }
-                  }
-                  return null;
-                },
-              ),
-            ],
-          );
-        } else {
-          // Em telas maiores, mantenha o layout horizontal
-          return Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _startDateController,
-                  readOnly: true,
-                  onTap: () => _selectStartDate(context),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    labelText: 'From',
-                    labelStyle: TextStyle(color: Colors.grey[700]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    suffixIcon: const Icon(Icons.calendar_today),
-                    errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    helperText: ' ', // Adds space for error message
-                  ),
-                  validator: (value) {
-                    if (value != null && value.isNotEmpty && _endDateController.text.isNotEmpty) {
-                      // Check if start date is before end date
-                      final startDate = DateTime.tryParse(value);
-                      final endDate = DateTime.tryParse(_endDateController.text);
-                      
-                      if (startDate != null && endDate != null) {
-                        if (startDate.isAfter(endDate)) {
-                          return 'Start date must be before end date';
+  }Widget _buildDateRangeFields() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 400) {
+                return Column(
+                  children: [
+                    TextFormField(
+                      controller: _startDateController,
+                      readOnly: true,
+                      onTap: () => _selectStartDate(context),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        labelText: 'From Date',
+                        labelStyle: TextStyle(color: Colors.grey[700]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        suffixIcon: const Icon(Icons.calendar_today, size: 20),
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      ),
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty && _endDateController.text.isNotEmpty) {
+                          final startDate = DateTime.tryParse(value);
+                          final endDate = DateTime.tryParse(_endDateController.text);
+                          
+                          if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+                            return 'Start date must be before end date';
+                          }
                         }
-                      }
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: TextFormField(
-                  controller: _endDateController,
-                  readOnly: true,
-                  onTap: () => _selectEndDate(context),
-                  decoration: InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    labelText: 'To',
-                    labelStyle: TextStyle(color: Colors.grey[700]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
+                        return null;
+                      },
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    suffixIcon: const Icon(Icons.calendar_today),
-                    errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    helperText: ' ', // Adds space for error message
-                  ),
-                  validator: (value) {
-                    if (value != null && value.isNotEmpty && _startDateController.text.isNotEmpty) {
-                      // Check if end date is after start date
-                      final endDate = DateTime.tryParse(value);
-                      final startDate = DateTime.tryParse(_startDateController.text);
-                      
-                      if (startDate != null && endDate != null) {
-                        if (endDate.isBefore(startDate)) {
-                          return 'End date must be after start date';
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _endDateController,
+                      readOnly: true,
+                      onTap: () => _selectEndDate(context),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        labelText: 'To Date',
+                        labelStyle: TextStyle(color: Colors.grey[700]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        suffixIcon: const Icon(Icons.calendar_today, size: 20),
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      ),
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty && _startDateController.text.isNotEmpty) {
+                          final endDate = DateTime.tryParse(value);
+                          final startDate = DateTime.tryParse(_startDateController.text);
+                          
+                          if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+                            return 'End date must be after start date';
+                          }
                         }
-                      }
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
-          );
-        }
-      },
+                        return null;
+                      },
+                    ),
+                  ],
+                );
+              } else {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _startDateController,
+                        readOnly: true,
+                        onTap: () => _selectStartDate(context),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          labelText: 'From Date',
+                          labelStyle: TextStyle(color: Colors.grey[700]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          suffixIcon: const Icon(Icons.calendar_today),
+                          errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty && _endDateController.text.isNotEmpty) {
+                            final startDate = DateTime.tryParse(value);
+                            final endDate = DateTime.tryParse(_endDateController.text);
+                            
+                            if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+                              return 'Start date must be before end date';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _endDateController,
+                        readOnly: true,
+                        onTap: () => _selectEndDate(context),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          labelText: 'To Date',
+                          labelStyle: TextStyle(color: Colors.grey[700]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          suffixIcon: const Icon(Icons.calendar_today),
+                          errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty && _startDateController.text.isNotEmpty) {
+                            final endDate = DateTime.tryParse(value);
+                            final startDate = DateTime.tryParse(_startDateController.text);
+                            
+                            if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+                              return 'End date must be after start date';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }  Widget _buildExpiryDateRangeFields() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 400) {
+                return Column(
+                  children: [
+                    TextFormField(
+                      controller: _startExpiryDateController,
+                      readOnly: true,
+                      onTap: () => _selectStartExpiryDate(context),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        labelText: 'From Expiry Date',
+                        labelStyle: TextStyle(color: Colors.grey[700]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        suffixIcon: const Icon(Icons.event_busy, size: 20),
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      ),
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty && _endExpiryDateController.text.isNotEmpty) {
+                          final startDate = DateTime.tryParse(value);
+                          final endDate = DateTime.tryParse(_endExpiryDateController.text);
+                          
+                          if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+                            return 'Start date must be before end date';
+                          }
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _endExpiryDateController,
+                      readOnly: true,
+                      onTap: () => _selectEndExpiryDate(context),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        labelText: 'To Expiry Date',
+                        labelStyle: TextStyle(color: Colors.grey[700]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        suffixIcon: const Icon(Icons.event_busy, size: 20),
+                        errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      ),
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty && _startExpiryDateController.text.isNotEmpty) {
+                          final endDate = DateTime.tryParse(value);
+                          final startDate = DateTime.tryParse(_startExpiryDateController.text);
+                          
+                          if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+                            return 'End date must be after start date';
+                          }
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
+                );
+              } else {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _startExpiryDateController,
+                        readOnly: true,
+                        onTap: () => _selectStartExpiryDate(context),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          labelText: 'From Expiry Date',
+                          labelStyle: TextStyle(color: Colors.grey[700]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          suffixIcon: const Icon(Icons.event_busy),
+                          errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty && _endExpiryDateController.text.isNotEmpty) {
+                            final startDate = DateTime.tryParse(value);
+                            final endDate = DateTime.tryParse(_endExpiryDateController.text);
+                            
+                            if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+                              return 'Start date must be before end date';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _endExpiryDateController,
+                        readOnly: true,
+                        onTap: () => _selectEndExpiryDate(context),
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          labelText: 'To Expiry Date',
+                          labelStyle: TextStyle(color: Colors.grey[700]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          suffixIcon: const Icon(Icons.event_busy),
+                          errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty && _startExpiryDateController.text.isNotEmpty) {
+                            final endDate = DateTime.tryParse(value);
+                            final startDate = DateTime.tryParse(_startExpiryDateController.text);
+                            
+                            if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+                              return 'End date must be after start date';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
   Widget _buildWarrantyRangeFields(
@@ -1188,84 +1457,91 @@ class _FilterPageState extends State<FilterPage> {
     void Function(String?) onMinUnitChanged,
     void Function(String?) onMaxUnitChanged,
   ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Use vertical layout on smaller screens to prevent overflow
-        bool useVerticalLayout = constraints.maxWidth < 600;
-        
-        if (useVerticalLayout) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Minimum section
-              Text(
-                'Minimum',
-                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              _buildRangeInputRow(minController, minUnit, onMinUnitChanged, 'Min', maxController, maxUnit),
-              const SizedBox(height: 16),
-              
-              // Maximum section
-              Text(
-                'Maximum',
-                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              _buildRangeInputRow(maxController, maxUnit, onMaxUnitChanged, 'Max', minController, minUnit),
-            ],
-          );
-        } else {
-          // Use horizontal layout on larger screens
-          return Column(
-            children: [
-              // Header row with labels
-              Row(
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 8.0),
-                      child: Text(
-                        'Minimum',
-                        style: TextStyle(fontWeight: FontWeight.w500),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Use vertical layout on smaller screens
+          bool useVerticalLayout = constraints.maxWidth < 600;
+          
+          if (useVerticalLayout) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Minimum section
+                Text(
+                  'Minimum',
+                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                _buildRangeInputRow(minController, minUnit, onMinUnitChanged, 'Min', maxController, maxUnit),
+                const SizedBox(height: 16),
+                
+                // Maximum section
+                Text(
+                  'Maximum',
+                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                _buildRangeInputRow(maxController, maxUnit, onMaxUnitChanged, 'Max', minController, minUnit),
+              ],
+            );
+          } else {
+            // Use horizontal layout on larger screens
+            return Column(
+              children: [
+                // Header row with labels
+                Row(
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8.0),
+                        child: Text(
+                          'Minimum',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 8.0),
-                      child: Text(
-                        'Maximum',
-                        style: TextStyle(fontWeight: FontWeight.w500),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8.0),
+                        child: Text(
+                          'Maximum',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Input fields row
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Minimum value and unit
-                  Expanded(
-                    child: _buildRangeInputRow(minController, minUnit, onMinUnitChanged, 'Min', maxController, maxUnit),
-                  ),
-                  const SizedBox(width: 16),
-                  // Maximum value and unit
-                  Expanded(
-                    child: _buildRangeInputRow(maxController, maxUnit, onMaxUnitChanged, 'Max', minController, minUnit),
-                  ),
-                ],
-              ),
-            ],
-          );
-        }
-      },
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Input fields row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Minimum value and unit
+                    Expanded(
+                      child: _buildRangeInputRow(minController, minUnit, onMinUnitChanged, 'Min', maxController, maxUnit),
+                    ),
+                    const SizedBox(width: 16),
+                    // Maximum value and unit
+                    Expanded(
+                      child: _buildRangeInputRow(maxController, maxUnit, onMaxUnitChanged, 'Max', minController, minUnit),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          }
+        },
+      ),
     );
   }
-
   Widget _buildRangeInputRow(
     TextEditingController controller,
     String unit,
@@ -1286,8 +1562,8 @@ class _FilterPageState extends State<FilterPage> {
             decoration: InputDecoration(
               filled: true,
               fillColor: Colors.white,
-              labelText: 'Value',
-              labelStyle: TextStyle(color: Colors.grey[700], fontSize: 12),
+              labelText: validationType == 'Min' ? 'Minimum Value' : 'Maximum Value',
+              labelStyle: TextStyle(color: Colors.grey[700]),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(color: Colors.grey.shade300),
@@ -1296,9 +1572,9 @@ class _FilterPageState extends State<FilterPage> {
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(color: Colors.grey.shade300),
               ),
-              errorStyle: TextStyle(color: Colors.red[700], fontSize: 10),
-              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              isDense: true,
+              prefixIcon: Icon(validationType == 'Min' ? Icons.arrow_downward : Icons.arrow_upward),
+              errorStyle: TextStyle(color: Colors.red[700], fontSize: 12),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
             ),
             validator: (value) {
               // Skip validation if lifetime is selected or field is empty
@@ -1420,8 +1696,7 @@ class _FilterPageState extends State<FilterPage> {
       default:
         return value;
     }
-  }
-  Widget _buildUnitDropdown(String value, void Function(String?) onChanged) {
+  }  Widget _buildUnitDropdown(String value, void Function(String?) onChanged) {
     return DropdownButtonFormField<String>(
       value: value,
       items: _timeUnits.map((unit) {
@@ -1429,7 +1704,7 @@ class _FilterPageState extends State<FilterPage> {
           value: unit,
           child: Text(
             unit.substring(0, 1).toUpperCase() + unit.substring(1),
-            style: TextStyle(fontSize: 12),
+            style: TextStyle(fontSize: 14),
             overflow: TextOverflow.ellipsis,
           ),
         );
@@ -1437,6 +1712,8 @@ class _FilterPageState extends State<FilterPage> {
       decoration: InputDecoration(
         filled: true,
         fillColor: Colors.white,
+        labelText: 'Unit',
+        labelStyle: TextStyle(color: Colors.grey[700]),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -1445,10 +1722,9 @@ class _FilterPageState extends State<FilterPage> {
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: Colors.grey.shade300),
         ),
-        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       ),
-      style: TextStyle(fontSize: 12, color: Colors.black87),
+      style: TextStyle(fontSize: 14, color: Colors.black87),
       onChanged: onChanged,
       isExpanded: true, // Prevents overflow by expanding to available width
     );
@@ -1488,4 +1764,5 @@ class _FilterPageState extends State<FilterPage> {
       ),
     );
   }
+  // O método _buildEnhancedTextField foi removido pois não é mais utilizado
 }

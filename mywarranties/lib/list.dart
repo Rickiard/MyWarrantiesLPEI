@@ -217,8 +217,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
               return false;
             }
           }
-          
-          // Date range filter with null safety
+            // Date range filter with null safety
           if (_activeFilters['startDate']?.isNotEmpty ?? false) {
             final purchaseDate = DateTime.tryParse(product['purchaseDate'] ?? '');
             final startDate = DateTime.tryParse(_activeFilters['startDate']!);
@@ -230,6 +229,21 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
             final purchaseDate = DateTime.tryParse(product['purchaseDate'] ?? '');
             final endDate = DateTime.tryParse(_activeFilters['endDate']!);
             if (purchaseDate == null || endDate == null || purchaseDate.isAfter(endDate)) {
+              return false;
+            }
+          }
+            // Expiry date range filter with null safety
+          if (_activeFilters['startExpiryDate']?.isNotEmpty ?? false) {
+            final expiryDate = _calculateExpiryDateForFiltering(product);
+            final startExpiryDate = DateTime.tryParse(_activeFilters['startExpiryDate']!);
+            if (expiryDate == null || startExpiryDate == null || expiryDate.isBefore(startExpiryDate)) {
+              return false;
+            }
+          }
+          if (_activeFilters['endExpiryDate']?.isNotEmpty ?? false) {
+            final expiryDate = _calculateExpiryDateForFiltering(product);
+            final endExpiryDate = DateTime.tryParse(_activeFilters['endExpiryDate']!);
+            if (expiryDate == null || endExpiryDate == null || expiryDate.isAfter(endExpiryDate)) {
               return false;
             }
           }
@@ -466,8 +480,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     _searchController.dispose();
     _connectivitySubscription.cancel();
     super.dispose();
-  }
-  String _calculateExpiryDate(String? purchaseDate, String? warrantyPeriod, String? warrantyExtension) {
+  }  String _calculateExpiryDate(String? purchaseDate, String? warrantyPeriod, String? warrantyExtension) {
     if (purchaseDate == null || warrantyPeriod == null) return 'Unknown';
     if (warrantyPeriod.toLowerCase() == 'lifetime') return 'Never expires';
     
@@ -482,8 +495,31 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       
       if (expiryDate == null) return 'Never expires';
       
-      return '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';    } catch (e) {
+      return '${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}';
+    } catch (e) {
       return 'Unknown';
+    }
+  }
+
+  // Helper method to calculate expiry date specifically for filtering
+  DateTime? _calculateExpiryDateForFiltering(Map<String, dynamic> product) {
+    final String? purchaseDate = product['purchaseDate'];
+    final String? warrantyPeriod = product['warrantyPeriod'];
+    final String? warrantyExtension = product['warrantyExtension'];
+    
+    if (purchaseDate == null || warrantyPeriod == null) return null;
+    if (warrantyPeriod.toLowerCase() == 'lifetime') return null; // Lifetime warranties have no expiry
+    
+    try {
+      // Use the notification service for consistent date calculation
+      final notificationService = NotificationService();
+      return notificationService.calculateExpiryDate(
+        purchaseDate, 
+        warrantyPeriod, 
+        warrantyExtension
+      );
+    } catch (e) {
+      return null;
     }
   }
 
@@ -711,13 +747,15 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     if (Navigator.canPop(context)) {
       Navigator.of(context, rootNavigator: true).pop();
     }
-  }
-
-  void _applySorting() {
+  }  void _applySorting() {
+    // Check if sorting is explicitly enabled (must be set to 'true')
+    if (_activeFilters['sortingEnabled'] != 'true') {
+      return; // Skip sorting if not explicitly enabled
+    }
+    
     if (_activeFilters['sortField']?.isNotEmpty ?? false) {
       final sortField = _activeFilters['sortField']!;
       final isAscending = _activeFilters['sortDirection'] == 'asc';
-      
       _products.sort((a, b) {
         dynamic valueA = _getSortValue(a, sortField);
         dynamic valueB = _getSortValue(b, sortField);
@@ -745,7 +783,6 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       });
     }
   }
-
   dynamic _getSortValue(Map<String, dynamic> product, String sortField) {
     switch (sortField) {
       case 'name':
@@ -753,7 +790,19 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       case 'price':
         return _parsePrice(product['price']?.toString() ?? '0');
       case 'purchaseDate':
-        return DateTime.tryParse(product['purchaseDate'] ?? '') ?? DateTime(1900);
+        return DateTime.tryParse(product['purchaseDate'] ?? '') ?? DateTime(1900);      case 'expiryDate':
+        // Use the helper method to calculate expiry date for sorting
+        final expiryDate = _calculateExpiryDateForFiltering(product);
+        return expiryDate ?? DateTime(2100); // Put lifetime warranties at end when sorting ascending
+      case 'lastUpdated':
+        // Handle both createdAt and lastUpdated fields
+        final lastUpdated = product['UpdatedAt'] ?? product['createdAt'];
+        if (lastUpdated is Timestamp) {
+          return lastUpdated.toDate();
+        } else if (lastUpdated is String) {
+          return DateTime.tryParse(lastUpdated) ?? DateTime(1900);
+        }
+        return DateTime(1900);
       case 'warrantyPeriod':
         return _parseWarrantyToMonths(product['warrantyPeriod'] ?? '0');
       case 'warrantyExtension':
