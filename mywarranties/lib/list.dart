@@ -832,10 +832,6 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
           height: _isBottomBarCollapsed ? 15 : 80,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.1),
