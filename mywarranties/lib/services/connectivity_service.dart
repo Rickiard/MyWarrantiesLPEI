@@ -151,35 +151,3 @@ class NoInternetDialog extends StatelessWidget {
     );
   }
 }
-
-class ConnectionStatusBanner extends StatelessWidget {
-  final bool isConnected;
-  
-  const ConnectionStatusBanner({Key? key, required this.isConnected}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    if (isConnected) return SizedBox.shrink();
-    
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      color: Colors.red[600],
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.signal_wifi_off, color: Colors.white, size: 16),
-          SizedBox(width: 8),
-          Text(
-            'No Internet Connection',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w500,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
