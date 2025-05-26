@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mywarranties/loading.dart';
 import 'package:mywarranties/services/notification_service.dart';
 import 'package:mywarranties/services/background_service.dart';
+import 'package:mywarranties/services/connectivity_service.dart';
 import 'firebase_options.dart';
 import 'login.dart';
 import 'register.dart';
@@ -50,8 +51,10 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.android,
   );
-  
-  try {
+    try {
+    // Initialize connectivity service
+    await ConnectivityService().initialize();
+    
     // Initialize notification service
     final notificationService = NotificationService();
     await notificationService.init();

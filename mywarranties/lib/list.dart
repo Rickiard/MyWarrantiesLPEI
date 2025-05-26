@@ -15,6 +15,7 @@ import 'statistics.dart';
 import 'productInfo.dart';
 import 'profile.dart';
 import 'services/notification_service.dart';
+import 'services/connectivity_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,11 +60,14 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   bool _isSearchBarCollapsed = false;
   bool _isBottomBarCollapsed = false;
   double _lastScrollPosition = 0;
-  String _searchQuery = '';
-  Map<String, String> _activeFilters = {};
+  String _searchQuery = '';  Map<String, String> _activeFilters = {};
   bool _hasActiveFilters = false;
   int _currentIndex = 0;
-
+  
+  // Connectivity
+  late StreamSubscription<bool> _connectivitySubscription;
+  bool _isConnected = true;
+  bool _showingNoInternetDialog = false;
   @override
   void initState() {
     super.initState();
@@ -76,6 +80,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     );
 
     _scrollController.addListener(_handleScroll);
+    
+    // Initialize connectivity monitoring
+    _initializeConnectivity();
   }
 
   void _handleScroll() {
@@ -154,8 +161,16 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     final numericString = price.replaceAll(RegExp(r'[^\d.]'), '');
     return double.tryParse(numericString) ?? 0.0;
   }
-
   Future<void> _loadProducts() async {
+    // Check internet connection first
+    if (!await ConnectivityService().hasInternetConnection()) {
+      setState(() {
+        _errorMessage = 'No internet connection. Please check your network and try again.';
+        _isLoading = false;
+      });
+      return;
+    }
+
     if (_auth.currentUser == null) {
       setState(() {
         _errorMessage = 'Please sign in to view your products';
@@ -346,9 +361,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
           
           return true;
         }).toList();
-      }
-
-      // Apply search if there's an active search query
+      }      // Apply search if there's an active search query
       if (_searchQuery.isNotEmpty) {
         _products = _allProducts.where((product) {
           final name = (product['name'] ?? '').toString().toLowerCase();
@@ -358,6 +371,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       } else {
         _products = List.from(_allProducts);
       }
+
+      // Apply sorting if active filters include sorting options
+      _applySorting();
 
       setState(() {
         _isLoading = false;
@@ -442,13 +458,13 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       });
     }
   }
-
   @override
   void dispose() {
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     _animationController.dispose();
     _searchController.dispose();
+    _connectivitySubscription.cancel();
     super.dispose();
   }
   String _calculateExpiryDate(String? purchaseDate, String? warrantyPeriod, String? warrantyExtension) {
@@ -643,6 +659,116 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     }
   }
 
+  void _initializeConnectivity() {
+    final connectivityService = ConnectivityService();
+    _isConnected = connectivityService.isConnected;
+    
+    _connectivitySubscription = connectivityService.connectionStream.listen(
+      (bool isConnected) {
+        setState(() {
+          _isConnected = isConnected;
+        });
+        
+        if (!isConnected && !_showingNoInternetDialog) {
+          _showNoInternetDialog();
+        } else if (isConnected && _showingNoInternetDialog) {
+          _hideNoInternetDialog();
+        }
+      },
+    );
+  }
+
+  void _showNoInternetDialog() {
+    if (_showingNoInternetDialog) return;
+    
+    setState(() {
+      _showingNoInternetDialog = true;
+    });
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => NoInternetDialog(
+        onRetry: () async {
+          final hasConnection = await ConnectivityService().hasInternetConnection();
+          if (hasConnection) {
+            _hideNoInternetDialog();
+            // Reload products when connection is restored
+            await _loadProducts();
+          }
+        },
+      ),
+    );
+  }
+
+  void _hideNoInternetDialog() {
+    if (!_showingNoInternetDialog) return;
+    
+    setState(() {
+      _showingNoInternetDialog = false;
+    });
+    
+    if (Navigator.canPop(context)) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  void _applySorting() {
+    if (_activeFilters['sortField']?.isNotEmpty ?? false) {
+      final sortField = _activeFilters['sortField']!;
+      final isAscending = _activeFilters['sortDirection'] == 'asc';
+      
+      _products.sort((a, b) {
+        dynamic valueA = _getSortValue(a, sortField);
+        dynamic valueB = _getSortValue(b, sortField);
+        
+        // Handle null values
+        if (valueA == null && valueB == null) return 0;
+        if (valueA == null) return isAscending ? 1 : -1;
+        if (valueB == null) return isAscending ? -1 : 1;
+        
+        int comparison;
+        
+        // Handle different data types
+        if (valueA is String && valueB is String) {
+          comparison = valueA.toLowerCase().compareTo(valueB.toLowerCase());
+        } else if (valueA is num && valueB is num) {
+          comparison = valueA.compareTo(valueB);
+        } else if (valueA is DateTime && valueB is DateTime) {
+          comparison = valueA.compareTo(valueB);
+        } else {
+          // Convert to string for comparison
+          comparison = valueA.toString().toLowerCase().compareTo(valueB.toString().toLowerCase());
+        }
+        
+        return isAscending ? comparison : -comparison;
+      });
+    }
+  }
+
+  dynamic _getSortValue(Map<String, dynamic> product, String sortField) {
+    switch (sortField) {
+      case 'name':
+        return product['name']?.toString() ?? '';
+      case 'price':
+        return _parsePrice(product['price']?.toString() ?? '0');
+      case 'purchaseDate':
+        return DateTime.tryParse(product['purchaseDate'] ?? '') ?? DateTime(1900);
+      case 'warrantyPeriod':
+        return _parseWarrantyToMonths(product['warrantyPeriod'] ?? '0');
+      case 'warrantyExtension':
+        return _parseWarrantyToMonths(product['warrantyExtension'] ?? '0');
+      case 'category':
+        return product['category']?.toString() ?? '';
+      case 'brand':
+        return product['brand']?.toString() ?? '';
+      case 'storeDetails':
+        return product['storeDetails']?.toString() ?? '';
+      default:
+        return product[sortField]?.toString() ?? '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -748,10 +874,11 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       );
     } else if (_currentIndex == 3) {
       return ProfilePage();
-    }
-    // Return the main list view for other tabs
+    }    // Return the main list view for other tabs
     return Stack(
       children: [
+        // Connection status banner
+        ConnectionStatusBanner(isConnected: _isConnected),
         Column(
           children: [
             SizedBox(height: _isSearchBarCollapsed ? 80 : 88),
