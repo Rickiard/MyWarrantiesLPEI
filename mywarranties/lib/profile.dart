@@ -27,16 +27,15 @@ class ProfilePage extends StatefulWidget {
   _ProfilePageState createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth = FirebaseAuth.instance;
+class _ProfilePageState extends State<ProfilePage> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FileStorageService _fileStorage = FileStorageService();  
   final ImageCopyService _imageCopyService = ImageCopyService();
   bool _isLoading = true;
   String _username = '';
   String _email = '';
-  // Removed unused password field
   List<Map<String, dynamic>> _accounts = [];
-  
-  // Controller for adding new account
+    // Controller for adding new account
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
@@ -165,7 +164,9 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
       for (String accountJson in linkedAccountsJson) {
         final Map<String, dynamic> account = {};
         final parts = accountJson.split(':::');
-        if (parts.length >= 3) {
+        
+        // Check if this is in the new format (with isGoogleAccount flag)
+        if (parts.length >= 6) {
           final email = parts[0];
           final emailLower = email.toLowerCase();
           
@@ -180,10 +181,35 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
           account['email'] = email;
           account['uid'] = parts[1];
           account['password'] = parts[2];
+          account['isGoogleAccount'] = parts[3] == 'true';
+          account['accessToken'] = parts[4];
+          account['idToken'] = parts[5];
           
           loadedAccounts.add(account);
           addedEmails.add(emailLower);
-          print('Added account: $email to linked accounts');
+          print('Added account: $email to linked accounts (${account['isGoogleAccount'] ? "Google" : "Email"})');
+        } 
+        // Support for old format
+        else if (parts.length >= 3) {
+          final email = parts[0];
+          final emailLower = email.toLowerCase();
+          
+          print('Processing account (old format): $email');
+          
+          // Skip if this is the current user or if we've already added this email
+          if (emailLower == currentUserEmail || addedEmails.contains(emailLower)) {
+            print('Skipping account $email (current user or duplicate)');
+            continue;
+          }
+          
+          account['email'] = email;
+          account['uid'] = parts[1];
+          account['password'] = parts[2];
+          account['isGoogleAccount'] = parts[2] == 'google_sign_in';
+          
+          loadedAccounts.add(account);
+          addedEmails.add(emailLower);
+          print('Added account: $email to linked accounts (old format)');
         }
       }
       
@@ -210,8 +236,18 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
       // Add current user to the list first
       if (_auth.currentUser != null && _auth.currentUser!.email != null) {
         final currentUserEmail = _auth.currentUser!.email!;
+        final currentUserUid = _auth.currentUser!.uid;
         final currentUserPassword = prefs.getString('userPassword') ?? '';
-        accountsToSave.add('$currentUserEmail:::${_auth.currentUser!.uid}:::$currentUserPassword');
+        final accessToken = prefs.getString('accessToken') ?? '';
+        final idToken = prefs.getString('idToken') ?? '';
+        
+        // Check if this is a Google account
+        if (accessToken.isNotEmpty && idToken.isNotEmpty) {
+          accountsToSave.add('$currentUserEmail:::$currentUserUid:::google_sign_in:::true:::$accessToken:::$idToken');
+        } else {
+          accountsToSave.add('$currentUserEmail:::$currentUserUid:::$currentUserPassword:::false::::::');
+        }
+        
         emailsAdded.add(currentUserEmail.toLowerCase());
         print('Added current user to save list: $currentUserEmail');
       }
@@ -220,9 +256,20 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
       for (var account in _accounts) {
         final email = account['email'] as String;
         if (!emailsAdded.contains(email.toLowerCase())) {
-          accountsToSave.add('$email:::${account['uid']}:::${account['password']}');
+          final isGoogleAccount = account['isGoogleAccount'] == true;
+          final password = account['password'] as String? ?? '';
+          final uid = account['uid'] as String? ?? '';
+          final accessToken = account['accessToken'] as String? ?? '';
+          final idToken = account['idToken'] as String? ?? '';
+          
+          if (isGoogleAccount) {
+            accountsToSave.add('$email:::$uid:::google_sign_in:::true:::$accessToken:::$idToken');
+          } else {
+            accountsToSave.add('$email:::$uid:::$password:::false::::::');
+          }
+          
           emailsAdded.add(email.toLowerCase());
-          print('Added linked account to save list: $email');
+          print('Added linked account to save list: $email (${isGoogleAccount ? "Google" : "Email"})');
         } else {
           print('Skipping duplicate account: $email');
         }
@@ -237,7 +284,7 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
       for (var account in savedAccounts) {
         final parts = account.split(':::');
         if (parts.isNotEmpty) {
-          print('Saved account: ${parts[0]}');
+          print('Saved account: ${parts[0]} (${parts.length >= 4 && parts[3] == "true" ? "Google" : "Email"})');
         }
       }
     } catch (e) {
@@ -407,12 +454,12 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
       ),
     );
   }
-
   Widget _buildAccountItem({
     required String email,
     required bool isActive,
     required VoidCallback onSwitch,
     required VoidCallback onRemove,
+    bool isGoogleAccount = false,
   }) {
     return Container(
       margin: EdgeInsets.only(bottom: 10),
@@ -426,32 +473,66 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.account_circle,
-            color: isActive ? Colors.blue : Colors.grey,
-            size: 28,
-          ),
+          isGoogleAccount
+            ? Container(
+                width: 28,
+                height: 28,                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  image: DecorationImage(
+                    image: AssetImage('assets/Google__G__logo.svg.png'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              )
+            : Icon(
+                Icons.account_circle,
+                color: isActive ? Colors.blue : Colors.grey,
+                size: 28,
+              ),
           SizedBox(width: 15),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  email,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                    color: isActive ? Colors.black87 : Colors.black54,
-                  ),
-                ),
-                if (isActive)
-                  Text(
-                    'Active',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        email,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                          color: isActive ? Colors.black87 : Colors.black54,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    if (isActive)
+                      Text(
+                        'Active',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    if (isGoogleAccount)
+                      Padding(
+                        padding: EdgeInsets.only(left: isActive ? 8.0 : 0),
+                        child: Text(
+                          'Google Account',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -489,8 +570,7 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Google Sign-In Button
-                InkWell(
-                  onTap: () async {
+                InkWell(                  onTap: () async {
                     try {
                       // Show loading indicator
                       showDialog(
@@ -499,38 +579,156 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                         builder: (context) => Center(
                           child: CircularProgressIndicator(),
                         ),
+                      );                      // Force sign out of Google to ensure account selection dialog shows
+                      await _googleSignIn.signOut();
+                      await Future.delayed(Duration(milliseconds: 500));
+                      
+                      // Show message to select a different account
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Please select a different Google account to link'),
+                          duration: Duration(seconds: 2),
+                        ),
                       );
-
-                      // Start Google Sign-In process
+                      
+                      // Get current user's email for comparison
+                      final currentUserEmail = _auth.currentUser?.email?.toLowerCase() ?? '';
+                      
+                      // Start sign-in process with account selector
                       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
                       if (googleUser != null) {
                         try {
+                          // Check if the selected Google account is the same as current account
+                          if (googleUser.email.toLowerCase() == currentUserEmail) {
+                            // Close loading dialog
+                            if (Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            }
+                            
+                            // Close the add account dialog
+                            Navigator.of(context).pop();
+                            
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Expanded(child: Text('You selected the same account you are already signed in with. Please select a different Google account.')),
+                                  ],
+                                ),
+                                backgroundColor: Colors.orange,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            );
+                            return;                          }
+                          
                           // Get Google account details
-                          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;                          // Create Firebase credential with Google token
+                          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+                          
+                          // Create Firebase credential with Google token
                           final AuthCredential credential = GoogleAuthProvider.credential(
                             accessToken: googleAuth.accessToken,
                             idToken: googleAuth.idToken,
                           );
 
-                          // Save current user credentials
+                          // Save current user credentials before any changes
+                          final currentUser = _auth.currentUser;
+                          final currentEmail = currentUser?.email ?? '';
                           final prefs = await SharedPreferences.getInstance();
-                          final currentEmail = _auth.currentUser?.email ?? '';
                           final currentPassword = prefs.getString('userPassword') ?? '';
+                          final currentIsGoogle = currentUser?.providerData
+                              .any((info) => info.providerId == 'google.com') ?? false;
+                          final currentAccessToken = prefs.getString('accessToken');
+                          final currentIdToken = prefs.getString('idToken');
+                          
+                          // Check if this Google account is already linked
+                          final existingGoogle = _accounts.where((account) => 
+                            account['email'].toString().toLowerCase() == googleUser.email.toLowerCase() && account['isGoogleAccount'] == true).toList();
+                          
+                          if (existingGoogle.isNotEmpty) {
+                            // Close loading dialog
+                            if (Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            }
+                            
+                            // Close the add account dialog
+                            Navigator.of(context).pop();
+                            
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Expanded(child: Text('This Google account is already linked to your profile')),
+                                  ],
+                                ),
+                                backgroundColor: Colors.blue[700],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            );
+                            return;
+                          }
+                          
+                          // Current user's Google account check - Case insensitive comparison
+                          if (currentEmail.toLowerCase() == googleUser.email.toLowerCase()) {
+                            // Close loading dialog
+                            if (Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                            }
+                            
+                            // Close the add account dialog
+                            Navigator.of(context).pop();
+                            
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Expanded(child: Text('You are already signed in with this Google account')),
+                                  ],
+                                ),
+                                backgroundColor: Colors.blue[700],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            );
+                            return;
+                          }
 
-                          // Sign out from current account
-                          await FirebaseAuth.instance.signOut();
+                          // Temporarily sign in with Google to validate the new account
+                          final UserCredential tempCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+                          final User? tempUser = tempCredential.user;
 
-                          // Sign in with Google
-                          final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-                          final User? user = userCredential.user;
+                          if (tempUser != null) {
+                            // Save the Google account info
+                            final googleAccountInfo = {
+                              'email': tempUser.email,
+                              'uid': tempUser.uid,
+                              'password': 'google_sign_in',
+                              'isGoogleAccount': true,
+                              'accessToken': googleAuth.accessToken,
+                              'idToken': googleAuth.idToken,
+                            };
 
-                          if (user != null) {
-                            // Immediately sign out the Google account
+                            // Sign out the temporary Google account
                             await FirebaseAuth.instance.signOut();
 
-                            // Re-authenticate the current user
-                            if (currentEmail.isNotEmpty && currentPassword.isNotEmpty) {
+                            // Re-authenticate the original current user
+                            if (currentIsGoogle && currentAccessToken != null && currentIdToken != null) {
+                              // Re-authenticate with Google credentials
+                              final AuthCredential currentCredential = GoogleAuthProvider.credential(
+                                accessToken: currentAccessToken,
+                                idToken: currentIdToken,
+                              );
+                              await FirebaseAuth.instance.signInWithCredential(currentCredential);
+                            } else if (currentEmail.isNotEmpty && currentPassword.isNotEmpty) {
+                              // Re-authenticate with email/password
                               await FirebaseAuth.instance.signInWithEmailAndPassword(
                                 email: currentEmail,
                                 password: currentPassword,
@@ -545,12 +743,7 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                             // Add the Google account to linked accounts
                             setState(() {
                               final updatedAccounts = List<Map<String, dynamic>>.from(_accounts);
-                              updatedAccounts.add({
-                                'email': user.email,
-                                'uid': user.uid,
-                                'password': 'google_sign_in', // Special marker for Google accounts
-                                'isGoogleAccount': true,
-                              });
+                              updatedAccounts.add(googleAccountInfo);
                               _accounts = updatedAccounts;
                             });
 
@@ -583,13 +776,28 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                           }
 
                           // Show error message
+                          String errorMessage = 'Error signing in with Google. Please try again.';
+                          if (e is FirebaseAuthException) {
+                            switch (e.code) {
+                              case 'account-exists-with-different-credential':
+                                errorMessage = 'This email is already linked to a different account type.';
+                                break;
+                              case 'invalid-credential':
+                                errorMessage = 'Invalid Google credentials. Please try again.';
+                                break;
+                              case 'user-disabled':
+                                errorMessage = 'This account has been disabled.';
+                                break;
+                            }
+                          }
+                          
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Row(
                                 children: [
                                   Icon(Icons.error_outline, color: Colors.white),
                                   SizedBox(width: 10),
-                                  Expanded(child: Text('Error signing in with Google. Please try again.')),
+                                  Expanded(child: Text(errorMessage)),
                                 ],
                               ),
                               backgroundColor: Colors.red[700],
@@ -665,8 +873,7 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                     child: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
+                        mainAxisAlignment: MainAxisAlignment.center,                        children: [
                           Image.asset(
                             'assets/google_logo.png',
                             height: 50,
@@ -723,9 +930,8 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
               onPressed: () async {
                 final email = _emailController.text.trim();
                 final password = _passwordController.text.trim();
-                
-                // Check if account is already linked or is the current account
-                if (email == _auth.currentUser?.email) {
+                  // Check if account is already linked or is the current account - Case insensitive
+                if (email.toLowerCase() == _auth.currentUser?.email?.toLowerCase()) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Row(
@@ -745,7 +951,7 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                 }
                 
                 for (var account in _accounts) {
-                  if (account['email'] == email) {
+                  if (account['email'].toString().toLowerCase() == email.toLowerCase()) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Row(
@@ -1223,6 +1429,8 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                             _buildAccountItem(
                               email: _email,
                               isActive: true,
+                              isGoogleAccount: _auth.currentUser?.providerData
+                                  .any((info) => info.providerId == 'google.com') ?? false,
                               onSwitch: () {}, // No switch for the active account
                               onRemove: () {}, // No remove for the active account
                             ),
@@ -1230,6 +1438,7 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                             ..._accounts.map((account) => _buildAccountItem(
                                   email: account['email'],
                                   isActive: false,
+                                  isGoogleAccount: account['isGoogleAccount'] == true,
                                   onSwitch: () async {
                                     try {
                                       // Show loading indicator
@@ -1240,12 +1449,14 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                                           child: CircularProgressIndicator(),
                                         ),
                                       );
-                                      
-                                      // Get current user info to add to linked accounts
+                                        // Get current user info to add to linked accounts
                                       final currentEmail = _auth.currentUser?.email ?? '';
                                       final prefs = await SharedPreferences.getInstance();
                                       final currentPassword = prefs.getString('userPassword') ?? '';
                                       final currentUid = _auth.currentUser?.uid;
+                                      final currentUser = _auth.currentUser;
+                                      final currentAccessToken = prefs.getString('accessToken');
+                                      final currentIdToken = prefs.getString('idToken');
                                       
                                       print('Switching from $currentEmail to ${account['email']}');
                                       
@@ -1258,21 +1469,36 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                                       // Remove the account we're switching to from linked accounts
                                       updatedAccounts.removeWhere((a) => 
                                         a['email'].toString().toLowerCase() == switchToAccount['email'].toString().toLowerCase());
-                                      
-                                      // Add the previous account to linked accounts if it's valid and not already in the list
-                                      if (currentEmail.isNotEmpty && currentPassword.isNotEmpty) {
+                                        // Add the previous account to linked accounts if it's valid and not already in the list
+                                      if (currentEmail.isNotEmpty && (currentPassword.isNotEmpty || (currentAccessToken != null && currentIdToken != null))) {
                                         // Check if this account is already in the list
                                         final accountExists = updatedAccounts.any((a) => 
                                           a['email'].toString().toLowerCase() == currentEmail.toLowerCase());
                                         
                                         if (!accountExists) {
-                                          updatedAccounts.add({
-                                            'email': currentEmail,
-                                            'uid': currentUid,
-                                            'password': currentPassword,
-                                            'isGoogleAccount': false,
-                                          });
-                                          print('Added current account to linked accounts: $currentEmail');
+                                          // Determine if current account is Google account
+                                          final currentIsGoogleAccount = currentUser?.providerData
+                                              .any((info) => info.providerId == 'google.com') ?? false;
+                                          
+                                          if (currentIsGoogleAccount && currentAccessToken != null && currentIdToken != null) {
+                                            updatedAccounts.add({
+                                              'email': currentEmail,
+                                              'uid': currentUid,
+                                              'password': 'google_sign_in',
+                                              'isGoogleAccount': true,
+                                              'accessToken': currentAccessToken,
+                                              'idToken': currentIdToken,
+                                            });
+                                            print('Added current Google account to linked accounts: $currentEmail');
+                                          } else {
+                                            updatedAccounts.add({
+                                              'email': currentEmail,
+                                              'uid': currentUid,
+                                              'password': currentPassword,
+                                              'isGoogleAccount': false,
+                                            });
+                                            print('Added current email account to linked accounts: $currentEmail');
+                                          }
                                         } else {
                                           print('Current account already exists in linked accounts: $currentEmail');
                                         }
@@ -1282,8 +1508,7 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                                       for (var acc in updatedAccounts) {
                                         print('Account in prepared list: ${acc['email']}');
                                       }
-                                      
-                                      // Completely sign out the current user
+                                        // Completely sign out the current user
                                       await FirebaseAuth.instance.signOut();
                                       
                                       // Sign in with the new account
@@ -1291,19 +1516,87 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                                       GoogleSignInAuthentication? googleAuth;
                                       
                                       if (switchToAccount['isGoogleAccount'] == true) {
-                                        // Handle Google Sign-In
-                                        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-                                        if (googleUser == null) {
-                                          throw Exception('Google Sign-In was cancelled');
+                                        // Handle Google Sign-In using saved tokens first
+                                        try {
+                                          print('Attempting to switch to Google account using saved tokens: ${switchToAccount['email']}');
+                                          
+                                          // Try using saved tokens first if available
+                                          if (switchToAccount['accessToken'] != null && 
+                                              switchToAccount['idToken'] != null &&
+                                              switchToAccount['accessToken'].toString().isNotEmpty &&
+                                              switchToAccount['idToken'].toString().isNotEmpty) {
+                                            
+                                            print('Using saved Google tokens for ${switchToAccount['email']}');
+                                            
+                                            final AuthCredential credential = GoogleAuthProvider.credential(
+                                              accessToken: switchToAccount['accessToken'],
+                                              idToken: switchToAccount['idToken'],
+                                            );
+                                            
+                                            userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+                                            
+                                            // Verify that we signed in with the correct account
+                                            if (userCredential.user?.email?.toLowerCase() == switchToAccount['email'].toString().toLowerCase()) {
+                                              print('Successfully switched using saved tokens');
+                                              googleAuth = null; // No need for new auth since we used saved tokens
+                                            } else {
+                                              throw Exception('Token mismatch - need fresh authentication');
+                                            }
+                                          } else {
+                                            throw Exception('No saved tokens available - need fresh authentication');
+                                          }
+                                        } catch (tokenError) {
+                                          print('Saved tokens failed, attempting fresh Google sign-in: $tokenError');
+                                          
+                                          // Fall back to fresh Google sign-in only if saved tokens fail
+                                          try {
+                                            // Always sign out first to force account selection
+                                            await _googleSignIn.signOut();
+                                            
+                                            // Show message to user about which account to select
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Please sign in with ${switchToAccount['email']}'),
+                                                duration: Duration(seconds: 2),
+                                              ),
+                                            );
+                                            
+                                            // Small delay to ensure signout completes and message is seen
+                                            await Future.delayed(Duration(milliseconds: 500));
+                                            
+                                            // Try with explicit sign-in to force account selection
+                                            final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+                                            
+                                            if (googleUser == null) {
+                                              throw Exception('Google Sign-In was cancelled');
+                                            }
+                                            
+                                            // Verify that the signed-in Google account matches the one we're trying to switch to
+                                            if (googleUser.email.toLowerCase() != switchToAccount['email'].toString().toLowerCase()) {
+                                              // Wrong account selected
+                                              await _googleSignIn.signOut();
+                                              throw Exception('Incorrect Google account selected. Please try again and select ${switchToAccount['email']}.');
+                                            }
+                                            
+                                            googleAuth = await googleUser.authentication;
+                                            
+                                            final AuthCredential credential = GoogleAuthProvider.credential(
+                                              accessToken: googleAuth.accessToken,
+                                              idToken: googleAuth.idToken,
+                                            );
+                                            
+                                            userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+                                            
+                                            // Update stored tokens with fresh ones
+                                            if (googleAuth.accessToken != null && googleAuth.idToken != null) {
+                                              switchToAccount['accessToken'] = googleAuth.accessToken;
+                                              switchToAccount['idToken'] = googleAuth.idToken;
+                                            }
+                                          } catch (e) {
+                                            print('Fresh Google sign-in also failed: $e');
+                                            rethrow;
+                                          }
                                         }
-                                        
-                                        googleAuth = await googleUser.authentication;
-                                        final AuthCredential credential = GoogleAuthProvider.credential(
-                                          accessToken: googleAuth.accessToken,
-                                          idToken: googleAuth.idToken,
-                                        );
-                                        
-                                        userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
                                       } else {
                                         // Handle email/password sign-in
                                         userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -1337,12 +1630,19 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                                             .set({
                                           'isLoggedIn': true,
                                         }, SetOptions(merge: true));
-                                        
-                                        // Update SharedPreferences with new user credentials
+                                          // Update SharedPreferences with new user credentials
                                         await prefs.setString('userEmail', user.email ?? '');
-                                        if (switchToAccount['isGoogleAccount'] == true && googleAuth != null) {
-                                          await prefs.setString('accessToken', googleAuth.accessToken ?? '');
-                                          await prefs.setString('idToken', googleAuth.idToken ?? '');
+                                        if (switchToAccount['isGoogleAccount'] == true) {
+                                          // For Google accounts, use either fresh tokens or saved tokens
+                                          if (googleAuth != null) {
+                                            // Fresh tokens from new authentication
+                                            await prefs.setString('accessToken', googleAuth.accessToken ?? '');
+                                            await prefs.setString('idToken', googleAuth.idToken ?? '');
+                                          } else {
+                                            // Use saved tokens that were used for authentication
+                                            await prefs.setString('accessToken', switchToAccount['accessToken'] ?? '');
+                                            await prefs.setString('idToken', switchToAccount['idToken'] ?? '');
+                                          }
                                           await prefs.remove('userPassword');
                                         } else {
                                           await prefs.setString('userPassword', switchToAccount['password']);
@@ -1351,12 +1651,29 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
                                         }
                                         await prefs.setBool('isLoggedIn', true);
                                         
-                                        // Now that authentication is complete, update the UI state
+                                        // Update linked accounts with fresh tokens if we got them
+                                        if (switchToAccount['isGoogleAccount'] == true && googleAuth != null) {
+                                          // Find and update the account with fresh tokens in our accounts list
+                                          for (var account in updatedAccounts) {
+                                            if (account['email'].toString().toLowerCase() == switchToAccount['email'].toString().toLowerCase() &&
+                                                account['isGoogleAccount'] == true) {
+                                              account['accessToken'] = googleAuth.accessToken;
+                                              account['idToken'] = googleAuth.idToken;
+                                              break;
+                                            }
+                                          }
+                                        }                                        // Now that authentication is complete, update the UI state
                                         setState(() {
                                           _accounts = updatedAccounts;
                                           _email = user.email ?? switchToAccount['email'];
                                           _username = _email.split('@')[0];
                                         });
+                                        
+                                        // Save updated linked accounts with any new tokens
+                                        await _saveLinkedAccounts();
+                                        
+                                        // Reload linked accounts to ensure consistency
+                                        await _loadLinkedAccounts();
                                       }
                                       
                                       // Close loading dialog
