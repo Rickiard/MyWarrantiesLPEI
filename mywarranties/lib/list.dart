@@ -67,8 +67,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
   // Connectivity
   late StreamSubscription<bool> _connectivitySubscription;
   bool _isConnected = true;
-  bool _showingNoInternetDialog = false;
-  @override
+  bool _showingNoInternetDialog = false;  @override
   void initState() {
     super.initState();
     _checkLoginAndLoadProducts();
@@ -81,8 +80,17 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
 
     _scrollController.addListener(_handleScroll);
     
-    // Initialize connectivity monitoring
-    _initializeConnectivity();
+    // Initialize connectivity monitoring with a delay to avoid conflicts during navigation
+    _initializeConnectivityWithDelay();
+  }
+
+  // Initialize connectivity monitoring with a delay to prevent conflicts during navigation
+  void _initializeConnectivityWithDelay() async {
+    // Espera a navegação estabilizar antes de monitorar conectividade
+    await Future.delayed(Duration(milliseconds: 1200));
+    if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+      _initializeConnectivity();
+    }
   }
 
   void _handleScroll() {
@@ -694,18 +702,20 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       return '';
     }
   }
-
   void _initializeConnectivity() {
     final connectivityService = ConnectivityService();
     _isConnected = connectivityService.isConnected;
     
     _connectivitySubscription = connectivityService.connectionStream.listen(
       (bool isConnected) {
+        if (!mounted) return; // Don't process if widget is not mounted
+        
         setState(() {
           _isConnected = isConnected;
         });
         
-        if (!isConnected && !_showingNoInternetDialog) {
+        // Only show connectivity dialogs if the route is current and stable
+        if (!isConnected && !_showingNoInternetDialog && ModalRoute.of(context)?.isCurrent == true) {
           _showNoInternetDialog();
         } else if (isConnected && _showingNoInternetDialog) {
           _hideNoInternetDialog();
@@ -713,41 +723,42 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
       },
     );
   }
-
   void _showNoInternetDialog() {
-    if (_showingNoInternetDialog) return;
-    
+    // Não mostra se já está mostrando, contexto não está pronto ou rota não é atual
+    if (_showingNoInternetDialog || !mounted || ModalRoute.of(context)?.isCurrent != true) return;
     setState(() {
       _showingNoInternetDialog = true;
     });
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => NoInternetDialog(
-        onRetry: () async {
-          final hasConnection = await ConnectivityService().hasInternetConnection();
-          if (hasConnection) {
-            _hideNoInternetDialog();
-            // Reload products when connection is restored
-            await _loadProducts();
-          }
-        },
-      ),
-    );
+    // Delay extra para garantir estabilidade da UI após navegação
+    Future.delayed(Duration(milliseconds: 400), () {
+      if (!mounted || !_showingNoInternetDialog || ModalRoute.of(context)?.isCurrent != true) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => NoInternetDialog(
+          onRetry: () async {
+            final hasConnection = await ConnectivityService().hasInternetConnection();
+            if (hasConnection) {
+              _hideNoInternetDialog();
+              await _loadProducts();
+            }
+          },
+        ),
+      );
+    });
   }
-
   void _hideNoInternetDialog() {
-    if (!_showingNoInternetDialog) return;
-    
+    if (!_showingNoInternetDialog || !mounted) return;
     setState(() {
       _showingNoInternetDialog = false;
     });
-    
-    if (Navigator.canPop(context)) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-  }  void _applySorting() {
+    // Fecha qualquer diálogo aberto de forma segura
+    Future.delayed(Duration(milliseconds: 100), () {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+    });
+  }void _applySorting() {
     // Check if sorting is explicitly enabled (must be set to 'true')
     if (_activeFilters['sortingEnabled'] != 'true') {
       return; // Skip sorting if not explicitly enabled

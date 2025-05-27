@@ -15,13 +15,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'list.dart';
 import 'package:uuid/uuid.dart';
 
-// Inicialize o GoogleSignIn
+// Inicialize o GoogleSignIn com configuração melhorada
 final GoogleSignIn _googleSignIn = GoogleSignIn(
+  // Usar configuração do Firebase Options para maior segurança
   clientId: '598622253789-1oljk3c82dcqorbofvvb2otn12bkkp9s.apps.googleusercontent.com',
   scopes: [
     'email',
     'https://www.googleapis.com/auth/userinfo.profile',
   ],
+  // Adicionar configuração para forçar seleção de conta
+  forceCodeForRefreshToken: true,
 );
 
 void main() async {
@@ -277,40 +280,146 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class WelcomeScreen extends StatelessWidget {  // Função para lidar com o login do Google
-  Future<void> _handleGoogleSignIn(BuildContext context) async {
-    try {
-      // Show loading indicator
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+class WelcomeScreen extends StatelessWidget {
+  // Generate unique device token
+  Future<String> _generateDeviceToken() async {
+    return Uuid().v4();
+  }
 
+  // Check for existing session
+  Future<bool> _checkExistingSession(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        return data?['isLoggedIn'] == true && data?['deviceToken'] != null;
+      }
+      return false;
+    } catch (e) {
+      print('Error checking existing session: $e');
+      return false;
+    }
+  }
+
+  // Handle existing session notification
+  Future<void> _handleExistingSession(String userId) async {
+    try {
+      // Send notification to the other device
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(userId)
+          .set({
+        'message': 'You have been logged out because your account was accessed on another device.',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Update the user's document to clear the previous session
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .update({
+        'isLoggedIn': false,
+        'deviceToken': null,
+      });
+    } catch (e) {
+      print('Error handling existing session: $e');
+      // Continue with login even if notification fails
+    }
+  }
+  // Validate Google Play Services availability
+  Future<bool> _isGooglePlayServicesAvailable() async {
+    try {
+      // Try to check if Google Sign-In is available
+      await _googleSignIn.signOut();
+      return true;
+    } catch (e) {
+      print('Google Play Services not available: $e');
+      return false;
+    }
+  }  // Helper method to safely close loading dialog
+  void _closeLoadingDialog(BuildContext context, bool isLoading) {
+    if (isLoading) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  // Função para lidar com o login do Google
+  Future<void> _handleGoogleSignIn(BuildContext context) async {
+    // Show proper loading dialog with Material Design
+    bool isLoading = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false, // Prevent back button dismissal
+        child: AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Expanded(child: Text("Signing in with Google...")),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
       // Check if Google Play Services is available
       print('Starting Google Sign-In process...');
+      
+      // Validate Google Play Services availability
+      final bool isAvailable = await _isGooglePlayServicesAvailable();
+      if (!isAvailable) {
+        _closeLoadingDialog(context, isLoading);
+        isLoading = false;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text("Google Play Services not available on this device")),
+              ],
+            ),
+            backgroundColor: Colors.orange[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;      }
       
       // Clear any existing sign-in state
       await _googleSignIn.signOut();
       
-      // Check if Google Play Services is available
-      final bool isAvailable = await _googleSignIn.isSignedIn();
-      print('Google Sign-In available: $isAvailable');
+      // Inicia o processo de login com o Google com timeout
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn()
+          .timeout(Duration(seconds: 30), onTimeout: () {
+        throw Exception('Google Sign-In timeout. Please check your connection and try again.');
+      });
       
-      // Inicia o processo de login com o Google
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       print('Google Sign-In result: ${googleUser != null ? 'Success' : 'Cancelled or failed'}');
 
       if (googleUser != null) {
         try {
-          print('Getting authentication details for: ${googleUser.email}');
-          // Obtenha os detalhes da conta do Google
-          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+          print('Getting authentication details for: ${googleUser.email}');          // Obtenha os detalhes da conta do Google com timeout
+          final GoogleSignInAuthentication googleAuth = await googleUser.authentication
+              .timeout(Duration(seconds: 15), onTimeout: () {
+            throw Exception('Google authentication timeout. Please try again.');
+          });
 
           // Check if tokens are valid
-          if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+          if (googleAuth.accessToken == null || 
+              googleAuth.idToken == null ||
+              googleAuth.accessToken!.isEmpty ||
+              googleAuth.idToken!.isEmpty) {
             throw Exception('Failed to obtain valid Google authentication tokens');
           }
 
@@ -318,46 +427,26 @@ class WelcomeScreen extends StatelessWidget {  // Função para lidar com o logi
           final AuthCredential credential = GoogleAuthProvider.credential(
             accessToken: googleAuth.accessToken,
             idToken: googleAuth.idToken,
-          );
-
-          // Faça login no Firebase usando a credencial do Google
-          final UserCredential userCredential =
-              await FirebaseAuth.instance.signInWithCredential(credential);
+          );          // Faça login no Firebase usando a credencial do Google com timeout
+          final UserCredential userCredential = await FirebaseAuth.instance
+              .signInWithCredential(credential)
+              .timeout(Duration(seconds: 20), onTimeout: () {
+            throw Exception('Firebase authentication timeout. Please try again.');
+          });
 
           final User? user = userCredential.user;
 
           if (user != null) {
             try {
               // Generate device token
-              final deviceToken = Uuid().v4();
+              final deviceToken = await _generateDeviceToken();
 
               // Check for existing session
-              final userDoc = await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user.uid)
-                  .get();
-
-              if (userDoc.exists) {
-                final data = userDoc.data();
-                if (data?['isLoggedIn'] == true && data?['deviceToken'] != null) {
-                  // Send notification to the other device
-                  await FirebaseFirestore.instance
-                      .collection('notifications')
-                      .doc(user.uid)
-                      .set({
-                    'message': 'You have been logged out because your account was accessed on another device.',
-                    'timestamp': FieldValue.serverTimestamp(),
-                  });
-
-                  // Update the user's document to clear the previous session
-                  await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(user.uid)
-                      .update({
-                    'isLoggedIn': false,
-                    'deviceToken': null,
-                  });
-                }
+              final hasExistingSession = await _checkExistingSession(user.uid);
+              
+              if (hasExistingSession) {
+                // Handle existing session
+                await _handleExistingSession(user.uid);
               }
 
               // Update user document with new session
@@ -376,50 +465,49 @@ class WelcomeScreen extends StatelessWidget {  // Função para lidar com o logi
               SharedPreferences prefs = await SharedPreferences.getInstance();
               await prefs.setBool('isLoggedIn', true);
               await prefs.setString('accessToken', googleAuth.accessToken ?? '');
-              await prefs.setString('idToken', googleAuth.idToken ?? '');
-              await prefs.setString('deviceToken', deviceToken);
+              await prefs.setString('idToken', googleAuth.idToken ?? '');              await prefs.setString('deviceToken', deviceToken);
 
-              // Close loading dialog
-              if (Navigator.canPop(context)) {
+              // Close loading dialog safely
+              _closeLoadingDialog(context, isLoading);
+              isLoading = false;
+              // Wait a bit to ensure dialog is closed
+              await Future.delayed(Duration(milliseconds: 200));
+              // Close any remaining dialogs at root navigator
+              while (Navigator.of(context, rootNavigator: true).canPop()) {
                 Navigator.of(context, rootNavigator: true).pop();
+                await Future.delayed(Duration(milliseconds: 100));
               }
+              // Small delay for UI stability
+              await Future.delayed(Duration(milliseconds: 100));
 
-              // Exibe uma mensagem de sucesso
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      Icon(Icons.check_circle, color: Colors.white),
-                      SizedBox(width: 10),
-                      Expanded(child: Text("Welcome back, ${user.displayName}!")),
-                    ],
-                  ),
-                  backgroundColor: Colors.green[600],
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              );
-
-              // Redirecione para a tela principal
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => ListPage()),
-              );
+               // Use pushAndRemoveUntil for proper navigation
+               if (context.mounted) {
+                 Navigator.pushAndRemoveUntil(
+                   context,
+                   MaterialPageRoute(builder: (context) => ListPage()),
+                   (route) => false,
+                 );
+               }
             } catch (e) {
               print('Error updating session: $e');
-              // Close loading dialog if it's open
-              if (Navigator.canPop(context)) {
-                Navigator.pop(context);
+              _closeLoadingDialog(context, isLoading);
+              isLoading = false;
+              
+              // Show specific error message
+              String errorMessage = "Error updating session. Please try again.";
+              if (e.toString().contains('network')) {
+                errorMessage = "Network error. Please check your connection and try again.";
+              } else if (e.toString().contains('permission')) {
+                errorMessage = "Permission denied. Please check your account settings.";
               }
               
-              // Show error message
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Row(
                     children: [
                       Icon(Icons.error_outline, color: Colors.white),
                       SizedBox(width: 10),
-                      Expanded(child: Text("Error updating session. Please try again.")),
+                      Expanded(child: Text(errorMessage)),
                     ],
                   ),
                   backgroundColor: Colors.red[700],
@@ -427,24 +515,30 @@ class WelcomeScreen extends StatelessWidget {  // Função para lidar com o logi
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   duration: Duration(seconds: 4),
                 ),
-              );
-            }
+              );            }
           }
         } catch (e) {
           print('Error during Google sign in: $e');
-          // Close loading dialog if it's open
-          if (Navigator.canPop(context)) {
-            Navigator.pop(context);
+          _closeLoadingDialog(context, isLoading);
+          isLoading = false;
+          
+          // Handle specific Google Sign-In errors
+          String errorMessage = "Error signing in with Google. Please try again.";
+          if (e.toString().contains('timeout')) {
+            errorMessage = "Sign-in timeout. Please check your connection and try again.";
+          } else if (e.toString().contains('network')) {
+            errorMessage = "Network error. Please check your connection.";
+          } else if (e.toString().contains('credential')) {
+            errorMessage = "Invalid credentials. Please try signing in again.";
           }
           
-          // Show error message
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Row(
                 children: [
                   Icon(Icons.error_outline, color: Colors.white),
                   SizedBox(width: 10),
-                  Expanded(child: Text("Error signing in with Google. Please try again.")),
+                  Expanded(child: Text(errorMessage)),
                 ],
               ),
               backgroundColor: Colors.red[700],
@@ -455,26 +549,47 @@ class WelcomeScreen extends StatelessWidget {  // Função para lidar com o logi
           );
         }
       } else {
-        // Close loading dialog if it's open
-        if (Navigator.canPop(context)) {
-          Navigator.pop(context);
-        }
+        // User cancelled the sign-in
+        _closeLoadingDialog(context, isLoading);
+        isLoading = false;
+        await Future.delayed(Duration(milliseconds: 200));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(child: Text("Sign-in cancelled")),
+              ],
+            ),
+            backgroundColor: Colors.blue[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       print('Error initiating Google sign in: $e');
-      // Close loading dialog if it's open
-      if (Navigator.canPop(context)) {
-        Navigator.pop(context);
+      _closeLoadingDialog(context, isLoading);
+      isLoading = false;
+      await Future.delayed(Duration(milliseconds: 200));
+      
+      // Handle general errors
+      String errorMessage = "Unable to sign in with Google. Please try again.";
+      if (e.toString().contains('timeout')) {
+        errorMessage = "Connection timeout. Please check your internet and try again.";
+      } else if (e.toString().contains('Google Play Services')) {
+        errorMessage = "Google Play Services not available. Please update Google Play Services.";
       }
       
-      // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
             children: [
               Icon(Icons.error_outline, color: Colors.white),
               SizedBox(width: 10),
-              Expanded(child: Text("Error signing in with Google. Please try again.")),
+              Expanded(child: Text(errorMessage)),
             ],
           ),
           backgroundColor: Colors.red[700],
