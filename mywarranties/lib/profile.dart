@@ -244,46 +244,51 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
       print('Error saving linked accounts: $e');
     }
   }
-
-  void _logout() {
-    // Mostrar diálogo de confirmação
-    showDialog(
+  Future<void> _logout() async {
+    // Mostrar diálogo de confirmação e aguardar resposta
+    final bool? confirmLogout = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text('Logout'),
         content: Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              // Fechar o diálogo primeiro
-              Navigator.of(context).pop();
-              
-              // Executar o logout sem bloqueio
-              _performLogout();
-            },
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text('Logout'),
           ),
         ],
       ),
     );
-  }
-  
-  // Método separado para realizar o logout sem bloquear a UI
-  void _performLogout() async {
-    try {
-      // Show loading indicator
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(
-          child: CircularProgressIndicator(),
+    
+    // Se o usuário cancelou ou fechou o diálogo, não faça nada
+    if (confirmLogout != true) return;
+    
+    // Mostrar loading com useRootNavigator para garantir que possa ser fechado corretamente
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (dialogContext) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          backgroundColor: Colors.white,
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text("Logging out..."),
+            ],
+          ),
         ),
-      );
-      
+      ),
+    );
+    
+    try {
       // Update user status in Firestore if user is logged in
       if (_auth.currentUser != null) {
         try {
@@ -327,31 +332,41 @@ class _ProfilePageState extends State<ProfilePage> {  final FirebaseAuth _auth =
       prefs.remove('idToken');
       prefs.remove('deviceToken');
       
-      // Close loading dialog
-      if (Navigator.canPop(context)) {
+      // Aguarda um pequeno delay para garantir que todas operações terminaram
+      await Future.delayed(Duration(milliseconds: 300));
+      
+      // Fecha o diálogo de loading com rootNavigator
+      if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
       
+      // Aguarda mais um pequeno delay para garantir que UI está estável
+      await Future.delayed(Duration(milliseconds: 200));
+      
       // Navigate to the welcome screen
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => app.MyApp()),
-        (route) => false,
-      );
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => app.MyApp()),
+          (route) => false,
+        );
+      }
     } catch (e) {
       print('Error during logout: $e');
-      // Close loading dialog if it's open
-      if (Navigator.canPop(context)) {
+      
+      // Fecha o diálogo de loading se estiver aberto
+      if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
       
       // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error during logout. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error during logout. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
   
