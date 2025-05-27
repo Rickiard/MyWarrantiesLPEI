@@ -82,6 +82,9 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     
     // Initialize connectivity monitoring with a delay to avoid conflicts during navigation
     _initializeConnectivityWithDelay();
+    
+    // Verificar notificações diárias quando a app é aberta
+    _checkDailyNotifications();
   }
 
   // Initialize connectivity monitoring with a delay to prevent conflicts during navigation
@@ -90,6 +93,26 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
     await Future.delayed(Duration(milliseconds: 1200));
     if (mounted && ModalRoute.of(context)?.isCurrent == true) {
       _initializeConnectivity();
+    }
+  }
+
+  // Novo método para verificar notificações diárias
+  void _checkDailyNotifications() async {
+    try {
+      // Aguardar um pouco para a app estabilizar
+      await Future.delayed(Duration(seconds: 2));
+      
+      final notificationService = NotificationService();
+      
+      // Verificar e executar notificações se necessário
+      await notificationService.checkAndExecuteDailyNotifications();
+      
+      // Log do status para debug
+      final status = await notificationService.getDailyNotificationStatus();
+      print('📊 Status das notificações diárias: $status');
+      
+    } catch (e) {
+      print('❌ Erro ao verificar notificações diárias: $e');
     }
   }
 

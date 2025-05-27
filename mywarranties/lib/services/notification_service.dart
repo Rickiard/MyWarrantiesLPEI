@@ -12,7 +12,6 @@ class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
-
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -21,6 +20,10 @@ class NotificationService {
   static const int _sevenDaysNotificationId = 2;
   static const int _oneDayNotificationId = 3;
   static const int _expiryDayNotificationId = 4;
+
+  // Nova flag para controlar se as notificações diárias foram lançadas
+  static const String _dailyNotificationsSentKey = 'daily_notifications_sent';
+  static const String _lastNotificationDateKey = 'last_notification_date';
 
   Future<void> init() async {
     await AwesomeNotifications().initialize(
@@ -182,7 +185,6 @@ class NotificationService {
     // Handle background/terminated messages
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
-
   Future<void> scheduleWarrantyExpiryChecks() async {
     // Check for warranties expiring soon
     await checkWarrantiesExpiringSoon();
@@ -194,6 +196,88 @@ class NotificationService {
     // Save the next scheduled check time
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('nextWarrantyCheck', tomorrow.toIso8601String());
+  }
+
+  // Novo método para verificar e executar notificações diárias
+  Future<void> checkAndExecuteDailyNotifications() async {
+    if (_auth.currentUser == null) return;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now();
+      
+      // Obter a data da última verificação
+      final lastNotificationDateStr = prefs.getString(_lastNotificationDateKey);
+      final lastNotificationDate = lastNotificationDateStr != null 
+          ? DateTime.parse(lastNotificationDateStr) 
+          : null;
+      
+      // Verificar se as notificações já foram enviadas hoje
+      final notificationsSentToday = prefs.getBool(_dailyNotificationsSentKey) ?? false;
+      
+      // Verificar se é um novo dia
+      final isNewDay = lastNotificationDate == null || 
+          !_isSameDay(lastNotificationDate, now);
+      
+      // Se é um novo dia, resetar a flag
+      if (isNewDay) {
+        await prefs.setBool(_dailyNotificationsSentKey, false);
+        await prefs.setString(_lastNotificationDateKey, now.toIso8601String());
+      }
+      
+      // Verificar se já passaram das 9h e se as notificações ainda não foram enviadas
+      final isAfter9AM = now.hour >= 9;
+      final shouldSendNotifications = isAfter9AM && !notificationsSentToday;
+      
+      if (shouldSendNotifications) {
+        print('🔔 Enviando notificações diárias às ${now.hour}:${now.minute}');
+        
+        // Executar verificação de garantias
+        await checkWarrantiesExpiringSoon();
+        
+        // Marcar que as notificações foram enviadas hoje
+        await prefs.setBool(_dailyNotificationsSentKey, true);
+        
+        print('✅ Notificações diárias enviadas e flag marcada');
+      } else if (!isAfter9AM) {
+        print('⏰ Ainda não são 9h da manhã (atual: ${now.hour}:${now.minute})');
+      } else if (notificationsSentToday) {
+        print('✅ Notificações já foram enviadas hoje');
+      }
+      
+    } catch (e) {
+      print('❌ Erro ao verificar notificações diárias: $e');
+    }
+  }
+
+  // Método auxiliar para verificar se duas datas são do mesmo dia
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+           date1.month == date2.month &&
+           date1.day == date2.day;
+  }
+
+  // Método público para forçar reset da flag (útil para testes)
+  Future<void> resetDailyNotificationFlag() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_dailyNotificationsSentKey, false);
+    print('🔄 Flag de notificações diárias resetada');
+  }
+
+  // Método para verificar status das notificações diárias
+  Future<Map<String, dynamic>> getDailyNotificationStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final notificationsSent = prefs.getBool(_dailyNotificationsSentKey) ?? false;
+    final lastDateStr = prefs.getString(_lastNotificationDateKey);
+    
+    return {
+      'notificationsSentToday': notificationsSent,
+      'lastNotificationDate': lastDateStr,
+      'currentTime': now.toIso8601String(),
+      'isAfter9AM': now.hour >= 9,
+      'shouldSendNotifications': now.hour >= 9 && !notificationsSent,
+    };
   }
   Future<void> checkWarrantiesExpiringSoon() async {
     if (_auth.currentUser == null) return;

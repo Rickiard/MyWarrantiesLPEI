@@ -68,11 +68,12 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
-  if (service is AndroidServiceInstance) {
-    service.on(warrantyCheckTaskName).listen((event) async {
+  if (service is AndroidServiceInstance) {    service.on(warrantyCheckTaskName).listen((event) async {
       try {
         final notificationService = NotificationService();
-        await notificationService.checkWarrantiesExpiringSoon();
+        
+        // Nova lógica: verificar e executar notificações diárias
+        await notificationService.checkAndExecuteDailyNotifications();
         
         // Update the last check time
         final prefs = await SharedPreferences.getInstance();

@@ -53,8 +53,7 @@ void main() async {
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.android,
-  );
-    try {
+  );    try {
     // Initialize connectivity service
     await ConnectivityService().initialize();
     
@@ -64,6 +63,9 @@ void main() async {
     
     // Initialize background service for warranty checks
     await BackgroundService.initialize();
+    
+    // Verificar notificações diárias ao iniciar a app
+    await notificationService.checkAndExecuteDailyNotifications();
     
     print('Notification and background services initialized successfully');
   } catch (e) {
