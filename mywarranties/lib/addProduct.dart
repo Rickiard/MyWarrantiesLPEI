@@ -11,6 +11,7 @@ import 'services/local_file_storage_service.dart';
 import 'services/image_copy_service.dart';
 import 'services/file_copy_service.dart';
 import 'services/background_service.dart';
+import 'services/notification_service.dart';
 
 class AddProductPage extends StatefulWidget {
   @override

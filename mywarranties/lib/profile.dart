@@ -8,7 +8,6 @@ import 'notification_settings.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'services/local_file_storage_service.dart';
 import 'services/image_copy_service.dart';
-import 'services/notification_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
@@ -1027,6 +1026,7 @@ class _ProfilePageState extends State<ProfilePage> {
       return false;
     }
   }
+
   // Add account to quick switch list
   Future<void> _addQuickSwitchAccount(Map<String, dynamic> account) async {
     final emailLower = (account['email'] as String).toLowerCase();
@@ -1035,30 +1035,13 @@ class _ProfilePageState extends State<ProfilePage> {
       _quickSwitchAccounts.add(account);
     });
     await _saveQuickSwitchAccounts();
-    
-    // Refresh notifications for all accounts including the newly added one
-    try {
-      final notificationService = NotificationService();
-      await notificationService.refreshAllAccountNotifications();
-      print('✅ Notifications refreshed after adding account: ${account['email']}');
-    } catch (e) {
-      print('❌ Error refreshing notifications after adding account: $e');
-    }
-  }  // Remove account from quick switch list
+  }
+  // Remove account from quick switch list
   Future<void> _removeQuickSwitchAccount(String email) async {
     setState(() {
       _quickSwitchAccounts.removeWhere((a) => (a['email'] as String).toLowerCase() == email.toLowerCase());
     });
     await _saveQuickSwitchAccounts();
-    
-    // Refresh notifications for all remaining accounts
-    try {
-      final notificationService = NotificationService();
-      await notificationService.refreshAllAccountNotifications();
-      print('✅ Notifications refreshed after removing account: $email');
-    } catch (e) {
-      print('❌ Error refreshing notifications after removing account: $e');
-    }
   }
   // Switch to a quick switch account
   Future<void> _switchToQuickAccount(Map<String, dynamic> account) async {
