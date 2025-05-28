@@ -349,45 +349,18 @@ class WelcomeScreen extends StatelessWidget {
       print('Google Play Services not available: $e');
       return false;
     }
-  }  // Helper method to safely close loading dialog
-  void _closeLoadingDialog(BuildContext context, bool isLoading) {
-    if (isLoading) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
   }
 
   // Função para lidar com o login do Google
   Future<void> _handleGoogleSignIn(BuildContext context) async {
-    // Show proper loading dialog with Material Design
-    bool isLoading = true;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      useRootNavigator: true,
-      builder: (context) => WillPopScope(
-        onWillPop: () async => false, // Prevent back button dismissal
-        child: AlertDialog(
-          content: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 20),
-              Expanded(child: Text("Signing in with Google...")),
-            ],
-          ),
-        ),
-      ),
-    );
+    // Removed loading dialog popup
 
     try {
       // Check if Google Play Services is available
       print('Starting Google Sign-In process...');
-      
-      // Validate Google Play Services availability
+        // Validate Google Play Services availability
       final bool isAvailable = await _isGooglePlayServicesAvailable();
       if (!isAvailable) {
-        _closeLoadingDialog(context, isLoading);
-        isLoading = false;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -474,18 +447,8 @@ class WelcomeScreen extends StatelessWidget {
               SharedPreferences prefs = await SharedPreferences.getInstance();
               await prefs.setBool('isLoggedIn', true);
               await prefs.setString('accessToken', googleAuth.accessToken ?? '');
-              await prefs.setString('idToken', googleAuth.idToken ?? '');              await prefs.setString('deviceToken', deviceToken);
-
-              // Close loading dialog safely
-              _closeLoadingDialog(context, isLoading);
-              isLoading = false;
-              // Wait a bit to ensure dialog is closed
+              await prefs.setString('idToken', googleAuth.idToken ?? '');              await prefs.setString('deviceToken', deviceToken);              // Wait a bit to ensure UI is stable
               await Future.delayed(Duration(milliseconds: 200));
-              // Close any remaining dialogs at root navigator
-              while (Navigator.of(context, rootNavigator: true).canPop()) {
-                Navigator.of(context, rootNavigator: true).pop();
-                await Future.delayed(Duration(milliseconds: 100));
-              }
               // Small delay for UI stability
               await Future.delayed(Duration(milliseconds: 100));
 
@@ -496,11 +459,8 @@ class WelcomeScreen extends StatelessWidget {
                    MaterialPageRoute(builder: (context) => ListPage()),
                    (route) => false,
                  );
-               }
-            } catch (e) {
+               }            } catch (e) {
               print('Error updating session: $e');
-              _closeLoadingDialog(context, isLoading);
-              isLoading = false;
               
               // Show specific error message
               String errorMessage = "Error updating session. Please try again.";
@@ -527,10 +487,7 @@ class WelcomeScreen extends StatelessWidget {
               );            }
           }
         } catch (e) {
-          print('Error during Google sign in: $e');
-          _closeLoadingDialog(context, isLoading);
-          isLoading = false;
-          
+          print('Error during Google sign in: $e');          
           // Handle specific Google Sign-In errors
           String errorMessage = "Error signing in with Google. Please try again.";
           if (e.toString().contains('timeout')) {
@@ -556,11 +513,8 @@ class WelcomeScreen extends StatelessWidget {
               duration: Duration(seconds: 4),
             ),
           );
-        }
-      } else {
+        }      } else {
         // User cancelled the sign-in
-        _closeLoadingDialog(context, isLoading);
-        isLoading = false;
         await Future.delayed(Duration(milliseconds: 200));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -577,11 +531,8 @@ class WelcomeScreen extends StatelessWidget {
             duration: Duration(seconds: 2),
           ),
         );
-      }
-    } catch (e) {
+      }    } catch (e) {
       print('Error initiating Google sign in: $e');
-      _closeLoadingDialog(context, isLoading);
-      isLoading = false;
       await Future.delayed(Duration(milliseconds: 200));
       
       // Handle general errors
