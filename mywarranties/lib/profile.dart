@@ -22,7 +22,6 @@ final GoogleSignIn _googleSignIn = GoogleSignIn(
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
-
   // Load and auto-login to the last active account (called from main.dart on app start)
   static Future<bool> tryAutoLoginToLastAccount() async {
     try {
@@ -44,22 +43,66 @@ class ProfilePage extends StatefulWidget {
         
         if (lastActiveAccessToken != null && lastActiveIdToken != null) {
           try {
-            final AuthCredential credential = GoogleAuthProvider.credential(
-              accessToken: lastActiveAccessToken,
-              idToken: lastActiveIdToken,
+            // Try silent Google sign-in first
+            final GoogleSignIn googleSignIn = GoogleSignIn(
+              clientId: '598622253789-1oljk3c82dcqorbofvvb2otn12bkkp9s.apps.googleusercontent.com',
+              scopes: [
+                'email',
+                'https://www.googleapis.com/auth/userinfo.profile',
+              ],
             );
-            await FirebaseAuth.instance.signInWithCredential(credential);
             
-            // Update login status
-            await prefs.setBool('isLoggedIn', true);
-            await prefs.setString('userEmail', lastActiveEmail);
-            await prefs.setString('accessToken', lastActiveAccessToken);
-            await prefs.setString('idToken', lastActiveIdToken);
-            
-            print('Auto-login successful for Google account: $lastActiveEmail');
-            return true;
+            final GoogleSignInAccount? googleUser = await googleSignIn.signInSilently();
+            if (googleUser != null && googleUser.email.toLowerCase() == lastActiveEmail.toLowerCase()) {
+              // Silent sign-in successful, get fresh tokens
+              final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+              final AuthCredential credential = GoogleAuthProvider.credential(
+                accessToken: googleAuth.accessToken,
+                idToken: googleAuth.idToken,
+              );
+              await FirebaseAuth.instance.signInWithCredential(credential);
+              
+              // Update with fresh tokens
+              await prefs.setBool('isLoggedIn', true);
+              await prefs.setString('userEmail', lastActiveEmail);
+              await prefs.setString('accessToken', googleAuth.accessToken ?? lastActiveAccessToken);
+              await prefs.setString('idToken', googleAuth.idToken ?? lastActiveIdToken);
+              await prefs.setString('lastActiveAccessToken', googleAuth.accessToken ?? lastActiveAccessToken);
+              await prefs.setString('lastActiveIdToken', googleAuth.idToken ?? lastActiveIdToken);
+              
+              print('Auto-login successful with silent Google sign-in: $lastActiveEmail');
+              return true;
+            } else {
+              // Fall back to stored tokens
+              final AuthCredential credential = GoogleAuthProvider.credential(
+                accessToken: lastActiveAccessToken,
+                idToken: lastActiveIdToken,
+              );
+              await FirebaseAuth.instance.signInWithCredential(credential);
+              
+              // Update login status with stored tokens
+              await prefs.setBool('isLoggedIn', true);
+              await prefs.setString('userEmail', lastActiveEmail);
+              await prefs.setString('accessToken', lastActiveAccessToken);
+              await prefs.setString('idToken', lastActiveIdToken);
+              
+              print('Auto-login successful with stored Google tokens: $lastActiveEmail');
+              return true;
+            }
           } catch (e) {
-            print('Auto-login failed for Google account: $e');
+            print('Auto-login failed for Google account: $e');            // Try to clear potentially invalid Google session
+            try {
+              final GoogleSignIn googleSignIn = GoogleSignIn(
+                clientId: '598622253789-1oljk3c82dcqorbofvvb2otn12bkkp9s.apps.googleusercontent.com',
+                scopes: [
+                  'email',
+                  'https://www.googleapis.com/auth/userinfo.profile',
+                ],
+              );
+              await googleSignIn.signOut();
+            } catch (signOutError) {
+              print('Error signing out from Google: $signOutError');
+            }
           }
         }
       } else {
@@ -1083,35 +1126,97 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       await FirebaseAuth.instance.signOut();      UserCredential userCredential;
       if (account['isGoogleAccount'] == true) {
-        // Try to use saved tokens
-        if ((account['accessToken'] ?? '').toString().isNotEmpty && (account['idToken'] ?? '').toString().isNotEmpty) {
-          final AuthCredential credential = GoogleAuthProvider.credential(
-            accessToken: account['accessToken'],
-            idToken: account['idToken'],
-          );
-          userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-        } else {
-          // Force Google account selection
-          await _googleSignIn.signOut();
-          final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-          if (googleUser == null || googleUser.email.toLowerCase() != (account['email'] as String).toLowerCase()) {
-            throw Exception('Wrong Google account selected.');
+        // Try silent Google sign-in first for better UX
+        try {
+          final GoogleSignInAccount? googleUser = await _googleSignIn.signInSilently();
+          if (googleUser != null && googleUser.email.toLowerCase() == (account['email'] as String).toLowerCase()) {
+            // Silent sign-in successful, use fresh tokens
+            final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+            final AuthCredential credential = GoogleAuthProvider.credential(
+              accessToken: googleAuth.accessToken,
+              idToken: googleAuth.idToken,
+            );
+            userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+            
+            // Update stored tokens with fresh ones
+            account['accessToken'] = googleAuth.accessToken;
+            account['idToken'] = googleAuth.idToken;
+            await _saveQuickSwitchAccounts();
+            
+            await prefs.setString('userEmail', userCredential.user?.email ?? '');
+            await prefs.setString('accessToken', googleAuth.accessToken ?? '');
+            await prefs.setString('idToken', googleAuth.idToken ?? '');
+            await prefs.remove('userPassword');
+          } else {
+            throw Exception('Silent sign-in failed or wrong account');
           }
-          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-          final AuthCredential credential = GoogleAuthProvider.credential(
-            accessToken: googleAuth.accessToken,
-            idToken: googleAuth.idToken,
-          );
-          userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-          // Update saved tokens
-          account['accessToken'] = googleAuth.accessToken;
-          account['idToken'] = googleAuth.idToken;
-          await _saveQuickSwitchAccounts();
+        } catch (silentSignInError) {
+          print('Silent Google sign-in failed: $silentSignInError');
+          
+          // Fall back to stored tokens if available
+          if ((account['accessToken'] ?? '').toString().isNotEmpty && (account['idToken'] ?? '').toString().isNotEmpty) {
+            try {
+              final AuthCredential credential = GoogleAuthProvider.credential(
+                accessToken: account['accessToken'],
+                idToken: account['idToken'],
+              );
+              userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+              
+              await prefs.setString('userEmail', userCredential.user?.email ?? '');
+              await prefs.setString('accessToken', account['accessToken'] ?? '');
+              await prefs.setString('idToken', account['idToken'] ?? '');
+              await prefs.remove('userPassword');
+            } catch (tokenError) {
+              print('Stored tokens failed: $tokenError');
+              
+              // Last resort: Force interactive Google sign-in
+              await _googleSignIn.signOut();
+              final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+              if (googleUser == null || googleUser.email.toLowerCase() != (account['email'] as String).toLowerCase()) {
+                throw Exception('Wrong Google account selected or sign-in cancelled.');
+              }
+              final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+              final AuthCredential credential = GoogleAuthProvider.credential(
+                accessToken: googleAuth.accessToken,
+                idToken: googleAuth.idToken,
+              );
+              userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+              
+              // Update saved tokens
+              account['accessToken'] = googleAuth.accessToken;
+              account['idToken'] = googleAuth.idToken;
+              await _saveQuickSwitchAccounts();
+              
+              await prefs.setString('userEmail', userCredential.user?.email ?? '');
+              await prefs.setString('accessToken', googleAuth.accessToken ?? '');
+              await prefs.setString('idToken', googleAuth.idToken ?? '');
+              await prefs.remove('userPassword');
+            }
+          } else {
+            // No stored tokens, force interactive sign-in
+            await _googleSignIn.signOut();
+            final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+            if (googleUser == null || googleUser.email.toLowerCase() != (account['email'] as String).toLowerCase()) {
+              throw Exception('Wrong Google account selected or sign-in cancelled.');
+            }
+            final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+            final AuthCredential credential = GoogleAuthProvider.credential(
+              accessToken: googleAuth.accessToken,
+              idToken: googleAuth.idToken,
+            );
+            userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+            
+            // Update saved tokens
+            account['accessToken'] = googleAuth.accessToken;
+            account['idToken'] = googleAuth.idToken;
+            await _saveQuickSwitchAccounts();
+            
+            await prefs.setString('userEmail', userCredential.user?.email ?? '');
+            await prefs.setString('accessToken', googleAuth.accessToken ?? '');
+            await prefs.setString('idToken', googleAuth.idToken ?? '');
+            await prefs.remove('userPassword');
+          }
         }
-        await prefs.setString('userEmail', userCredential.user?.email ?? '');
-        await prefs.setString('accessToken', account['accessToken'] ?? '');
-        await prefs.setString('idToken', account['idToken'] ?? '');
-        await prefs.remove('userPassword');
       } else {
         userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: account['email'],
@@ -1121,7 +1226,7 @@ class _ProfilePageState extends State<ProfilePage> {
         await prefs.setString('userPassword', account['password']);
         await prefs.remove('accessToken');
         await prefs.remove('idToken');
-      }      await prefs.setBool('isLoggedIn', true);
+      }await prefs.setBool('isLoggedIn', true);
       setState(() {
         _email = userCredential.user?.email ?? account['email'];
         _username = _email.split('@')[0];
@@ -1155,7 +1260,6 @@ class _ProfilePageState extends State<ProfilePage> {
       );
     }
   }
-
   // Save the current active account as the last used account
   Future<void> _saveLastActiveAccount() async {
     try {
@@ -1174,15 +1278,46 @@ class _ProfilePageState extends State<ProfilePage> {
         await prefs.setString('lastActiveUid', currentUser.uid);
         await prefs.setBool('lastActiveIsGoogle', isGoogleAccount);
         
-        if (isGoogleAccount && currentAccessToken != null && currentIdToken != null) {
-          await prefs.setString('lastActiveAccessToken', currentAccessToken);
-          await prefs.setString('lastActiveIdToken', currentIdToken);
+        if (isGoogleAccount) {
+          // For Google accounts, always try to get fresh tokens if possible
+          try {
+            final GoogleSignInAccount? googleUser = await _googleSignIn.signInSilently();
+            if (googleUser != null && googleUser.email.toLowerCase() == currentEmail.toLowerCase()) {
+              final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+              final freshAccessToken = googleAuth.accessToken;
+              final freshIdToken = googleAuth.idToken;
+              
+              if (freshAccessToken != null && freshIdToken != null) {
+                await prefs.setString('lastActiveAccessToken', freshAccessToken);
+                await prefs.setString('lastActiveIdToken', freshIdToken);
+                // Also update current session tokens
+                await prefs.setString('accessToken', freshAccessToken);
+                await prefs.setString('idToken', freshIdToken);
+                print('Last active account saved with fresh Google tokens: $currentEmail');
+                return;
+              }
+            }
+          } catch (e) {
+            print('Failed to get fresh Google tokens, using stored ones: $e');
+          }
+          
+          // Fall back to stored tokens if fresh ones aren't available
+          if (currentAccessToken != null && currentIdToken != null) {
+            await prefs.setString('lastActiveAccessToken', currentAccessToken);
+            await prefs.setString('lastActiveIdToken', currentIdToken);
+          } else {
+            print('Warning: No Google tokens available for last active account');
+          }
         } else if (!isGoogleAccount && currentPassword.isNotEmpty) {
           await prefs.setString('lastActivePassword', currentPassword);
+          // Clear any Google tokens
+          await prefs.remove('lastActiveAccessToken');
+          await prefs.remove('lastActiveIdToken');
         }
         
-        print('Last active account saved: $currentEmail');
-      }    } catch (e) {
+        print('Last active account saved: $currentEmail (Google: $isGoogleAccount)');
+      }
+    } catch (e) {
       print('Error saving last active account: $e');
     }
   }
