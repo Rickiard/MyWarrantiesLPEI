@@ -657,7 +657,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                   width: double.infinity,
                   constraints: BoxConstraints(
                     minHeight: 200,
-                    maxHeight: 400,
+                    maxHeight: 600,
                   ),
                   margin: EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
@@ -680,7 +680,7 @@ class _ProductInfoPageState extends State<ProductInfoPage> {
                               borderRadius: BorderRadius.circular(14),
                               child: Image.file(
                                 File(widget.product['imagePath']),
-                                fit: BoxFit.cover,
+                                fit: BoxFit.fill,
                                 width: double.infinity,
                                 height: double.infinity,
                                 errorBuilder: (context, error, stackTrace) {

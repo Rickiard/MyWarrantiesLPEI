@@ -1231,7 +1231,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
               snapshot.data == true) {            // Local file exists, use adaptive container for both horizontal and vertical images
             return Container(
               width: 150,
-              constraints: BoxConstraints(minHeight: 150),
+              constraints: BoxConstraints(maxHeight: 150),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
@@ -1246,7 +1246,7 @@ class _ListPageState extends State<ListPage> with SingleTickerProviderStateMixin
                 borderRadius: BorderRadius.circular(12),
                 child: Image.file(
                   localFile,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.fill,
                   errorBuilder: (context, error, stackTrace) {
                     // Fall back to remote URL if there's an error
                     return _buildRemoteImageFallback(product);

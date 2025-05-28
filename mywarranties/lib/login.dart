@@ -250,15 +250,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         }
 
                         try {
-                          // Show loading indicator
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (context) => Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-
                           // Generate a unique device token
                           final deviceToken = await _generateDeviceToken();
 
@@ -346,11 +337,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             }
                           }
                         } catch (e) {
-                          // Close loading dialog if it's open
-                          if (Navigator.canPop(context)) {
-                            Navigator.pop(context);
-                          }
-
                           // Handle error messages
                           String errorMessage = "Unable to sign in. Please check your credentials and try again.";
                           if (e is FirebaseAuthException) {
