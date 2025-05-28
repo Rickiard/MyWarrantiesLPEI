@@ -8,6 +8,7 @@ import 'package:mywarranties/loading.dart';
 import 'package:mywarranties/services/notification_service.dart';
 import 'package:mywarranties/services/background_service.dart';
 import 'package:mywarranties/services/connectivity_service.dart';
+import 'package:mywarranties/profile.dart';
 import 'firebase_options.dart';
 import 'login.dart';
 import 'register.dart';
@@ -77,9 +78,15 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   Future<bool> _loadLoginStatus() async {
     try {
+      // First, try auto-login to last active account
+      final autoLoginSuccess = await ProfilePage.tryAutoLoginToLastAccount();
+      if (autoLoginSuccess) {
+        print('Auto-login to last active account successful');
+        return true;
+      }
+      
       // Check if a user is already signed in
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
