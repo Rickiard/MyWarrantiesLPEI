@@ -8,6 +8,7 @@ import 'notification_settings.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'services/local_file_storage_service.dart';
 import 'services/image_copy_service.dart';
+import 'services/notification_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
@@ -725,27 +726,43 @@ class _ProfilePageState extends State<ProfilePage> {
                   );
                   Navigator.of(context).pop();
                   return;
-                }
-                  try {
+                }                  try {
                   showDialog(
                     context: context,
                     barrierDismissible: false,
                     builder: (context) => Center(child: CircularProgressIndicator()),
                   );
                   
-                  // For email/password accounts, we'll add them directly without validation
-                  // The validation will happen when user tries to switch to this account
+                  // Validate the email/password credentials without affecting current session
+                  final isValid = await _validateEmailPasswordCredentials(email, password);
+                  
                   if (Navigator.canPop(context)) Navigator.pop(context);
+                  
+                  if (!isValid) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(children: [
+                          Icon(Icons.error_outline, color: Colors.white), 
+                          SizedBox(width: 10), 
+                          Expanded(child: Text('Invalid email or password. Please check your credentials.'))
+                        ]),
+                        backgroundColor: Colors.red[700],
+                      ),
+                    );
+                    return;
+                  }
+                  
+                  // If validation successful, add the account
                   await _addQuickSwitchAccount({
                     'email': email,
-                    'uid': '', // We'll get the UID when switching to the account
+                    'uid': '', // We'll update this when switching to the account
                     'password': password,
                     'isGoogleAccount': false,
                   });
                   Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Row(children: [Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 10), Expanded(child: Text('Account added! Credentials will be validated when switching to this account.'))]),
+                      content: Row(children: [Icon(Icons.check_circle, color: Colors.white), SizedBox(width: 10), Expanded(child: Text('Account added and validated successfully!'))]),
                       backgroundColor: Colors.green[600],
                     ),
                   );
@@ -937,6 +954,79 @@ class _ProfilePageState extends State<ProfilePage> {
     }
     return null;
   }
+  // Validate email/password credentials without affecting current session
+  Future<bool> _validateEmailPasswordCredentials(String email, String password) async {
+    try {
+      // Save current user state
+      final currentUser = _auth.currentUser;
+      final prefs = await SharedPreferences.getInstance();
+      final currentEmail = currentUser?.email;
+      final currentPassword = prefs.getString('userPassword');
+      final currentAccessToken = prefs.getString('accessToken');
+      final currentIdToken = prefs.getString('idToken');
+      final isCurrentGoogle = currentUser?.providerData.any((info) => info.providerId == 'google.com') ?? false;      try {
+        // Create a temporary Firebase Auth instance or use current one carefully
+        // First, try to authenticate with the new credentials
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+        
+        // Sign out the temporary login immediately
+        await FirebaseAuth.instance.signOut();
+        
+        // Restore the current user session
+        if (currentUser != null) {
+          if (isCurrentGoogle && currentAccessToken != null && currentIdToken != null) {
+            // Restore Google session
+            final AuthCredential credential = GoogleAuthProvider.credential(
+              accessToken: currentAccessToken,
+              idToken: currentIdToken,
+            );
+            await FirebaseAuth.instance.signInWithCredential(credential);
+          } else if (currentEmail != null && currentPassword != null) {
+            // Restore email/password session
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+              email: currentEmail,
+              password: currentPassword,
+            );
+          }
+        }
+        
+        print('Email/password validation successful for: $email');
+        return true;
+        
+      } catch (authError) {
+        print('Email/password validation failed: $authError');
+        
+        // Ensure we restore the current session even if validation failed
+        if (currentUser != null) {
+          try {
+            if (isCurrentGoogle && currentAccessToken != null && currentIdToken != null) {
+              final AuthCredential credential = GoogleAuthProvider.credential(
+                accessToken: currentAccessToken,
+                idToken: currentIdToken,
+              );
+              await FirebaseAuth.instance.signInWithCredential(credential);
+            } else if (currentEmail != null && currentPassword != null) {
+              await FirebaseAuth.instance.signInWithEmailAndPassword(
+                email: currentEmail,
+                password: currentPassword,
+              );
+            }
+          } catch (restoreError) {
+            print('Error restoring current session: $restoreError');
+          }
+        }
+        
+        return false;
+      }
+      
+    } catch (e) {
+      print('Error during credential validation: $e');
+      return false;
+    }
+  }
   // Add account to quick switch list
   Future<void> _addQuickSwitchAccount(Map<String, dynamic> account) async {
     final emailLower = (account['email'] as String).toLowerCase();
@@ -945,13 +1035,30 @@ class _ProfilePageState extends State<ProfilePage> {
       _quickSwitchAccounts.add(account);
     });
     await _saveQuickSwitchAccounts();
-  }
-  // Remove account from quick switch list
+    
+    // Refresh notifications for all accounts including the newly added one
+    try {
+      final notificationService = NotificationService();
+      await notificationService.refreshAllAccountNotifications();
+      print('✅ Notifications refreshed after adding account: ${account['email']}');
+    } catch (e) {
+      print('❌ Error refreshing notifications after adding account: $e');
+    }
+  }  // Remove account from quick switch list
   Future<void> _removeQuickSwitchAccount(String email) async {
     setState(() {
       _quickSwitchAccounts.removeWhere((a) => (a['email'] as String).toLowerCase() == email.toLowerCase());
     });
     await _saveQuickSwitchAccounts();
+    
+    // Refresh notifications for all remaining accounts
+    try {
+      final notificationService = NotificationService();
+      await notificationService.refreshAllAccountNotifications();
+      print('✅ Notifications refreshed after removing account: $email');
+    } catch (e) {
+      print('❌ Error refreshing notifications after removing account: $e');
+    }
   }
   // Switch to a quick switch account
   Future<void> _switchToQuickAccount(Map<String, dynamic> account) async {
